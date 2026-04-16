@@ -1,4 +1,4 @@
-import type { DayPrices, CurrentPrice, HistoryDay, BackendStatus, PricePeriod } from "./types"
+import type { DayPrices, CurrentPrice, HistoryDay, BackendStatus, PricePeriod, DayTariffs, TariffPeriod, CurrentTariff } from "./types"
 
 // Generate realistic Irish DAM prices with typical daily pattern
 function generateDayPrices(dateStr: string, isHoliday = false): DayPrices {
@@ -159,4 +159,99 @@ export function findCheapestWindow(periods: PricePeriod[], windowSize = 4): { st
   }
   
   return { start: bestStart, avgPrice: Math.round(minAvg * 100) / 100 }
+}
+
+// Tariff constants
+const FLAT_RATE_EUR_KWH = 0.2638 // Electric Ireland standard, incl. VAT
+const VAT_RATE = 0.09 // 9% VAT on domestic electricity in Ireland
+const FLAT_MARKUP_EUR_MWH = 20 // Typical flat markup
+const MARKUP_PCT = 0.03 // 3% markup percentage
+
+// Convert spot price to customer tariff
+function calculateTariff(spotPrice: number): { tariff_eur_mwh: number; tariff_eur_kwh: number; tariff_inc_vat_eur_kwh: number } {
+  const tariff_eur_mwh = (spotPrice + FLAT_MARKUP_EUR_MWH) * (1 + MARKUP_PCT)
+  const tariff_eur_kwh = tariff_eur_mwh / 1000
+  const tariff_inc_vat_eur_kwh = tariff_eur_kwh * (1 + VAT_RATE)
+  
+  return {
+    tariff_eur_mwh: Math.round(tariff_eur_mwh * 100) / 100,
+    tariff_eur_kwh: Math.round(tariff_eur_kwh * 10000) / 10000,
+    tariff_inc_vat_eur_kwh: Math.round(tariff_inc_vat_eur_kwh * 10000) / 10000,
+  }
+}
+
+// Generate tariff data from spot prices
+function generateDayTariffs(dayPrices: DayPrices): DayTariffs {
+  const periods: TariffPeriod[] = dayPrices.periods.map(period => {
+    const tariff = calculateTariff(period.price_eur_mwh)
+    return {
+      ...period,
+      ...tariff,
+    }
+  })
+  
+  return {
+    trading_day: dayPrices.trading_day,
+    day_type: dayPrices.day_type,
+    holiday: dayPrices.holiday,
+    published_at: dayPrices.published_at,
+    periods,
+  }
+}
+
+// Get current tariff based on Dublin time
+export function getCurrentTariff(dayTariffs: DayTariffs): CurrentTariff {
+  const now = new Date()
+  const dublinHour = now.getHours()
+  const dublinMinute = now.getMinutes()
+  const currentPeriodIndex = dublinHour * 2 + (dublinMinute >= 30 ? 1 : 0)
+  
+  const period = dayTariffs.periods[Math.min(currentPeriodIndex, 47)]
+  const tariffs = dayTariffs.periods.map(p => p.tariff_eur_kwh)
+  const tariffs_inc_vat = dayTariffs.periods.map(p => p.tariff_inc_vat_eur_kwh)
+  
+  const daily_avg_tariff_eur_kwh = Math.round((tariffs_inc_vat.reduce((a, b) => a + b, 0) / tariffs_inc_vat.length) * 10000) / 10000
+  const delta_vs_avg_pct = ((period.tariff_eur_kwh - daily_avg_tariff_eur_kwh) / daily_avg_tariff_eur_kwh) * 100
+  
+  // Determine signal from quintile
+  let signal: "CHEAP" | "BELOW_AVERAGE" | "AVERAGE" | "ABOVE_AVERAGE" | "EXPENSIVE"
+  if (period.quintile === 1) signal = "CHEAP"
+  else if (period.quintile === 2) signal = "BELOW_AVERAGE"
+  else if (period.quintile === 3) signal = "AVERAGE"
+  else if (period.quintile === 4) signal = "ABOVE_AVERAGE"
+  else signal = "EXPENSIVE"
+  
+  // Get next 6 periods
+  const next_periods = dayTariffs.periods.slice(
+    Math.min(currentPeriodIndex + 1, 47),
+    Math.min(currentPeriodIndex + 7, 48)
+  )
+  
+  return {
+    ...period,
+    daily_avg: Math.round((tariffs.reduce((a, b) => a + b, 0) / tariffs.length) * 10000) / 10000,
+    daily_min: Math.min(...tariffs_inc_vat),
+    daily_max: Math.max(...tariffs_inc_vat),
+    signal,
+    tariff_name: "Standard",
+    next_periods,
+    daily_avg_tariff_eur_kwh,
+    delta_vs_avg_pct: Math.round(delta_vs_avg_pct * 10) / 10,
+  }
+}
+
+// Get today's tariffs
+export function getTodayTariffs(): DayTariffs {
+  return generateDayTariffs(getTodayPrices())
+}
+
+// Get tomorrow's tariffs
+export function getTomorrowTariffs(): DayTariffs | null {
+  const tomorrow = getTomorrowPrices()
+  return tomorrow ? generateDayTariffs(tomorrow) : null
+}
+
+// Get yesterday's tariffs
+export function getYesterdayTariffs(): DayTariffs {
+  return generateDayTariffs(getYesterdayPrices())
 }

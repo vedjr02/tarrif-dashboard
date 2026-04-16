@@ -7,6 +7,7 @@ import { Footer } from "./footer"
 import { PriceSignalCard } from "./price-signal-card"
 import { NextPeriodsStrip } from "./next-periods-strip"
 import { PriceCurveChart } from "./price-curve-chart"
+import { DynamicPricingCard } from "./dynamic-pricing-card"
 import { ActionRecommendations } from "./action-recommendations"
 import { DailySummaryBar } from "./daily-summary-bar"
 import { PriceTable } from "./price-table"
@@ -19,15 +20,21 @@ import {
   getCurrentPeriod,
   getHistoricalData,
   getBackendStatus,
+  getTodayTariffs,
+  getTomorrowTariffs,
+  getYesterdayTariffs,
+  getCurrentTariff,
 } from "@/lib/mock-data"
-import type { DayPrices, CurrentPrice, HistoryDay, BackendStatus, Quintile } from "@/lib/types"
+import type { DayPrices, CurrentPrice, HistoryDay, BackendStatus, Quintile, DayTariffs, CurrentTariff } from "@/lib/types"
 import { Activity, Table2, History } from "lucide-react"
 
 export function Dashboard() {
   const [todayPrices, setTodayPrices] = useState<DayPrices | null>(null)
   const [tomorrowPrices, setTomorrowPrices] = useState<DayPrices | null>(null)
   const [yesterdayPrices, setYesterdayPrices] = useState<DayPrices | null>(null)
+  const [todayTariffs, setTodayTariffs] = useState<DayTariffs | null>(null)
   const [currentPrice, setCurrentPrice] = useState<CurrentPrice | null>(null)
+  const [currentTariff, setCurrentTariff] = useState<CurrentTariff | null>(null)
   const [historyData, setHistoryData] = useState<HistoryDay[]>([])
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
   const [currentPeriodIndex, setCurrentPeriodIndex] = useState(0)
@@ -39,6 +46,8 @@ export function Dashboard() {
     const tomorrow = getTomorrowPrices()
     const yesterday = getYesterdayPrices()
     const current = getCurrentPeriod(today)
+    const todayTariff = getTodayTariffs()
+    const currentTariffData = getCurrentTariff(todayTariff)
     const history = getHistoricalData(30)
     const status = getBackendStatus()
 
@@ -46,6 +55,8 @@ export function Dashboard() {
     setTomorrowPrices(tomorrow)
     setYesterdayPrices(yesterday)
     setCurrentPrice(current)
+    setTodayTariffs(todayTariff)
+    setCurrentTariff(currentTariffData)
     setHistoryData(history)
     setBackendStatus(status)
     setCurrentPeriodIndex(current.period - 1)
@@ -81,7 +92,7 @@ export function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  if (!todayPrices || !currentPrice || !yesterdayPrices || !backendStatus) {
+  if (!todayPrices || !currentPrice || !yesterdayPrices || !backendStatus || !todayTariffs || !currentTariff) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -136,17 +147,21 @@ export function Dashboard() {
             {/* Hero Section */}
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-1">
-                <PriceSignalCard currentPrice={currentPrice} previousPeriod={previousPeriod} />
+                <PriceSignalCard currentPrice={currentPrice} currentTariff={currentTariff} previousPeriod={previousPeriod} />
               </div>
               <div className="space-y-6 lg:col-span-2">
-                <NextPeriodsStrip periods={todayPrices.periods} currentPeriodIndex={currentPeriodIndex} />
+                <NextPeriodsStrip periods={todayPrices.periods} tariffPeriods={todayTariffs.periods} currentPeriodIndex={currentPeriodIndex} />
                 <DailySummaryBar currentPrice={currentPrice} dayPrices={todayPrices} />
               </div>
             </div>
 
+            {/* Dynamic Pricing Card */}
+            <DynamicPricingCard currentTariff={currentTariff} dayTariffs={todayTariffs} />
+
             {/* Price Curve Chart */}
             <PriceCurveChart
               todayPrices={todayPrices}
+              todayTariffs={todayTariffs}
               tomorrowPrices={tomorrowPrices}
               yesterdayPrices={yesterdayPrices}
               currentPeriodIndex={currentPeriodIndex}

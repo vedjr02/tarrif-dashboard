@@ -7,6 +7,12 @@ export interface PricePeriod {
   source: "SEMOPX" | "ENTSO-E" | "Interpolated"
 }
 
+export interface TariffPeriod extends PricePeriod {
+  tariff_eur_mwh: number
+  tariff_eur_kwh: number
+  tariff_inc_vat_eur_kwh: number
+}
+
 export interface DayPrices {
   trading_day: string
   day_type: "weekday" | "weekend"
@@ -15,10 +21,29 @@ export interface DayPrices {
   periods: PricePeriod[]
 }
 
+export interface DayTariffs {
+  trading_day: string
+  day_type: "weekday" | "weekend"
+  holiday: boolean
+  published_at: string
+  periods: TariffPeriod[]
+}
+
 export interface CurrentPrice extends PricePeriod {
   daily_avg: number
   daily_min: number
   daily_max: number
+}
+
+export interface CurrentTariff extends TariffPeriod {
+  daily_avg: number
+  daily_min: number
+  daily_max: number
+  signal: "CHEAP" | "BELOW_AVERAGE" | "AVERAGE" | "ABOVE_AVERAGE" | "EXPENSIVE"
+  tariff_name: string
+  next_periods: TariffPeriod[]
+  daily_avg_tariff_eur_kwh: number
+  delta_vs_avg_pct: number
 }
 
 export interface HistoryDay {

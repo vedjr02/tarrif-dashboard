@@ -1,17 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Zap } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import type { CurrentPrice, PricePeriod, Quintile } from "@/lib/types"
+import type { CurrentPrice, CurrentTariff, PricePeriod, Quintile } from "@/lib/types"
 import { getQuintileColor, QUINTILE_CONFIG } from "@/lib/types"
 
 interface PriceSignalCardProps {
   currentPrice: CurrentPrice
+  currentTariff?: CurrentTariff
   previousPeriod?: PricePeriod
 }
 
-export function PriceSignalCard({ currentPrice, previousPeriod }: PriceSignalCardProps) {
+const FLAT_RATE_EUR_KWH = 0.2638
+const VAT_RATE = 0.09
+
+export function PriceSignalCard({ currentPrice, currentTariff, previousPeriod }: PriceSignalCardProps) {
   const [countdown, setCountdown] = useState("")
 
   useEffect(() => {
@@ -49,6 +53,24 @@ export function PriceSignalCard({ currentPrice, previousPeriod }: PriceSignalCar
         : "same"
     : "same"
 
+  const savingVsFlat = currentTariff 
+    ? FLAT_RATE_EUR_KWH - currentTariff.tariff_inc_vat_eur_kwh
+    : 0
+
+  // Determine signal color background
+  let signalBgClass = "bg-q3-average"
+  let signalTextColor = "text-q3-average"
+  
+  if (currentTariff) {
+    if (currentTariff.signal === "CHEAP" || currentTariff.signal === "BELOW_AVERAGE") {
+      signalBgClass = "bg-q1-cheap/20 dark:bg-q1-cheap/10"
+      signalTextColor = "text-q1-cheap"
+    } else if (currentTariff.signal === "ABOVE_AVERAGE" || currentTariff.signal === "EXPENSIVE") {
+      signalBgClass = "bg-q5-expensive/20 dark:bg-q5-expensive/10"
+      signalTextColor = "text-q5-expensive"
+    }
+  }
+
   return (
     <Card className="overflow-hidden border-2" style={{ borderColor: getQuintileColor(currentPrice.quintile as Quintile) }}>
       <CardContent className="p-0">
@@ -62,7 +84,7 @@ export function PriceSignalCard({ currentPrice, previousPeriod }: PriceSignalCar
         </div>
         
         <div className="space-y-4 p-6">
-          {/* Current Price */}
+          {/* Wholesale Price */}
           <div className="flex items-center justify-center gap-3">
             <div className="text-center">
               <div className="flex items-baseline justify-center gap-1">
@@ -87,6 +109,25 @@ export function PriceSignalCard({ currentPrice, previousPeriod }: PriceSignalCar
               </span>
             </div>
           </div>
+
+          {/* Customer Tariff (Dynamic Pricing) */}
+          {currentTariff && (
+            <div className={`rounded-lg ${signalBgClass} px-4 py-3 border border-border`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Zap className={`h-4 w-4 ${signalTextColor}`} />
+                  <span className="text-sm font-semibold">{currentTariff.tariff_inc_vat_eur_kwh.toFixed(4)} €/kWh</span>
+                </div>
+                <span className="text-xs text-muted-foreground">incl. 9% VAT</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Fixed plan: {FLAT_RATE_EUR_KWH.toFixed(4)} €/kWh</span>
+                <span className={`font-semibold ${savingVsFlat > 0 ? "text-q1-cheap" : "text-q5-expensive"}`}>
+                  {savingVsFlat > 0 ? `You save ${savingVsFlat.toFixed(4)} €/kWh` : `You pay ${Math.abs(savingVsFlat).toFixed(4)} €/kWh more`}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Countdown & Delta */}
           <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">

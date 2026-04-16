@@ -3,17 +3,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Sparkles } from "lucide-react"
-import type { PricePeriod, Quintile } from "@/lib/types"
+import type { PricePeriod, TariffPeriod, Quintile } from "@/lib/types"
 import { getQuintileColor } from "@/lib/types"
 
 interface NextPeriodsStripProps {
   periods: PricePeriod[]
+  tariffPeriods?: TariffPeriod[]
   currentPeriodIndex: number
 }
 
-export function NextPeriodsStrip({ periods, currentPeriodIndex }: NextPeriodsStripProps) {
+export function NextPeriodsStrip({ periods, tariffPeriods, currentPeriodIndex }: NextPeriodsStripProps) {
   // Get next 6 periods
   const nextPeriods = periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
+  const nextTariffPeriods = tariffPeriods?.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
   
   // Find the cheapest period in the next 12
   const next12 = periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 13)
@@ -48,13 +50,14 @@ export function NextPeriodsStrip({ periods, currentPeriodIndex }: NextPeriodsStr
       </CardHeader>
       <CardContent>
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {nextPeriods.map((period) => {
+          {nextPeriods.map((period, idx) => {
             const isCheapest = cheapestPeriod && period.period === cheapestPeriod.period
+            const tariffPeriod = nextTariffPeriods?.[idx]
             
             return (
               <div
                 key={period.period}
-                className={`relative flex min-w-[100px] flex-col items-center rounded-lg border p-3 transition-colors ${
+                className={`relative flex min-w-[110px] flex-col items-center rounded-lg border p-3 transition-colors ${
                   isCheapest ? "border-accent bg-accent/10" : "border-border bg-card"
                 }`}
               >
@@ -76,6 +79,16 @@ export function NextPeriodsStrip({ periods, currentPeriodIndex }: NextPeriodsStr
                 </span>
                 
                 <span className="text-[10px] text-muted-foreground">€/MWh</span>
+
+                {/* Customer tariff in €/kWh */}
+                {tariffPeriod && (
+                  <>
+                    <span className="mt-2 text-xs font-medium tabular-nums text-foreground">
+                      {tariffPeriod.tariff_inc_vat_eur_kwh.toFixed(4)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground opacity-70">€/kWh</span>
+                  </>
+                )}
                 
                 <div
                   className="mt-2 h-2 w-2 rounded-full"
