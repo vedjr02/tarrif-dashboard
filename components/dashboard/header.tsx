@@ -61,7 +61,7 @@ export function Header({ backendStatus, lastUpdate, onSettingsClick }: HeaderPro
           />
           <div className="flex flex-col">
             <span className="text-lg font-semibold text-foreground">EnergyPrice</span>
-            <span className="text-xs text-muted-foreground">Irish DAM Dashboard</span>
+            <span className="text-xs text-muted-foreground">Dynamic Prices Dashboard</span>
           </div>
         </div>
 
@@ -70,13 +70,12 @@ export function Header({ backendStatus, lastUpdate, onSettingsClick }: HeaderPro
           <div className="hidden items-center gap-2 sm:flex">
             <div className="relative flex items-center gap-1.5">
               <span
-                className={`h-2 w-2 rounded-full ${
-                  backendStatus === "ok"
+                className={`h-2 w-2 rounded-full ${backendStatus === "ok"
                     ? "bg-primary animate-pulse"
                     : backendStatus === "stale"
-                    ? "bg-accent"
-                    : "bg-destructive"
-                }`}
+                      ? "bg-accent"
+                      : "bg-destructive"
+                  }`}
               />
               <span className="text-xs font-medium text-muted-foreground">
                 {backendStatus === "ok" ? "Live" : backendStatus === "stale" ? `Stale — ${lastUpdate}` : "Error"}
@@ -92,10 +91,10 @@ export function Header({ backendStatus, lastUpdate, onSettingsClick }: HeaderPro
 
           {/* Theme Toggle */}
           {mounted && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")} 
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="h-9 w-9"
             >
               {theme === "dark" ? (
