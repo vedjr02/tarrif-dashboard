@@ -60,7 +60,7 @@ export function Header({ backendStatus, lastUpdate, onSettingsClick }: HeaderPro
             className="rounded-lg"
           />
           <div className="flex flex-col">
-            <span className="text-lg font-semibold text-foreground">EnergyPrice</span>
+            <span className="text-lg font-semibold text-foreground">Energy Price</span>
             <span className="text-xs text-muted-foreground">Dynamic Prices Dashboard</span>
           </div>
         </div>
