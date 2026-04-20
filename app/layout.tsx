@@ -8,10 +8,10 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'EnergyPrice Ireland — Live Electricity Pricing',
-  description: 'Real-time Irish Day-Ahead Market electricity prices. Dynamic pricing dashboard for energy aggregators and prosumers. 30-minute price signals, smart action recommendations, and historical analysis.',
+  title: 'ADFLEX Dynamic Price Dashboard | Real-time Irish Electricity Pricing',
+  description: 'Real-time Irish Day-Ahead Market electricity prices from Semo PX. Dynamic pricing dashboard for energy aggregators and prosumers. 30-minute price signals, smart action recommendations, Irish tariff comparison, and operational savings metrics.',
   generator: 'v0.app',
-  keywords: ['electricity pricing', 'Ireland', 'DAM', 'SEMOpx', 'energy', 'prosumer', 'dynamic pricing'],
+  keywords: ['ADFLEX', 'dynamic pricing', 'electricity pricing', 'Ireland', 'DAM', 'SEMOpx', 'Semo PX', 'energy', 'prosumer', 'HD Flex', 'Hai Resi'],
   icons: {
     icon: [
       {
@@ -46,8 +46,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="dark">
-      <body className="font-sans antialiased bg-background">
+    <html lang="en" suppressHydrationWarning className="dark bg-background">
+      <body className="font-sans antialiased bg-background text-foreground">
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
