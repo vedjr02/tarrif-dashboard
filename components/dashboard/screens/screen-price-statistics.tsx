@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { TrendingUp, TrendingDown, Minus, Zap, Clock, Activity, BarChart3 } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Zap, Clock, Activity } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { CurrentPrice, CurrentTariff, PricePeriod, DayPrices, DayTariffs, Quintile } from "@/lib/types"
@@ -27,7 +27,6 @@ export function ScreenPriceStatistics({
   currentPeriodIndex,
 }: ScreenPriceStatisticsProps) {
   const [countdown, setCountdown] = useState("")
-  const [dublinDate, setDublinDate] = useState("")
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -47,20 +46,7 @@ export function ScreenPriceStatistics({
       )
     }
 
-    const updateDate = () => {
-      const now = new Date()
-      const dateFormatter = new Intl.DateTimeFormat("en-IE", {
-        timeZone: "Europe/Dublin",
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-      setDublinDate(dateFormatter.format(now))
-    }
-
     updateCountdown()
-    updateDate()
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
   }, [])
@@ -100,18 +86,69 @@ export function ScreenPriceStatistics({
 
   return (
     <div className="flex h-full flex-col gap-8 p-8">
-      {/* Top Section: Date and Current Price */}
+      {/* Top Section: Day Profile and Current Price */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Left: Date Display - Large */}
+        {/* Left: Today's Price Band — all 48 half-hour slots */}
         <Card className="bg-card/50">
-          <CardContent className="flex h-full flex-col items-center justify-center p-8">
-            <div className="text-center">
-              <div className="text-6xl font-bold text-foreground tracking-tight lg:text-7xl">
-                {dublinDate.split(",")[0]}
-              </div>
-              <div className="mt-2 text-3xl text-muted-foreground lg:text-4xl">
-                {dublinDate.split(",").slice(1).join(",")}
-              </div>
+          <CardContent className="flex h-full flex-col justify-between p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xl font-semibold text-foreground">Today&apos;s Price Profile</span>
+              <span className="text-base text-muted-foreground">48 half-hour periods</span>
+            </div>
+
+            {/* Bar chart of all periods */}
+            <div className="flex flex-1 items-end gap-px">
+              {dayPrices.periods.map((period, idx) => {
+                const isNow = idx === currentPeriodIndex
+                const heightPct =
+                  currentPrice.daily_max > currentPrice.daily_min
+                    ? ((period.price_eur_mwh - currentPrice.daily_min) /
+                        (currentPrice.daily_max - currentPrice.daily_min)) *
+                        80 +
+                      20
+                    : 50
+                return (
+                  <div
+                    key={period.period}
+                    className="relative flex-1"
+                    style={{ height: "120px" }}
+                    title={`${formatTime(period.start_time_dublin)} — €${period.price_eur_mwh.toFixed(1)}/MWh`}
+                  >
+                    <div
+                      className="absolute bottom-0 w-full rounded-t-sm transition-all"
+                      style={{
+                        height: `${heightPct}%`,
+                        backgroundColor: getQuintileColor(period.quintile as Quintile),
+                        opacity: isNow ? 1 : 0.65,
+                        outline: isNow ? "2px solid white" : "none",
+                        outlineOffset: "1px",
+                      }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Time axis labels */}
+            <div className="mt-2 flex justify-between text-sm text-muted-foreground">
+              <span>00:00</span>
+              <span>06:00</span>
+              <span>12:00</span>
+              <span>18:00</span>
+              <span>24:00</span>
+            </div>
+
+            {/* Quintile legend */}
+            <div className="mt-3 flex items-center gap-4">
+              {([1, 2, 3, 4, 5] as Quintile[]).map((q) => (
+                <div key={q} className="flex items-center gap-1.5">
+                  <div
+                    className="h-3 w-3 rounded-sm"
+                    style={{ backgroundColor: getQuintileColor(q) }}
+                  />
+                  <span className="text-sm text-muted-foreground">{QUINTILE_CONFIG[q].signal}</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
