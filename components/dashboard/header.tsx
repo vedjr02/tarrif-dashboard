@@ -67,21 +67,21 @@ export function Header({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 border-r border-border pr-4">
             <Image
-              src="/logos/hd-flex-logo.jpg"
+              src="/logos/adflex.jpeg"
               alt="HD Flex"
               width={48}
               height={48}
               className="rounded-lg object-contain"
             />
             <Image
-              src="/logos/hai-resi-logo.jpg"
+              src="/logos/iresi.png"
               alt="Hai Resi"
               width={48}
               height={48}
               className="rounded-lg object-contain"
             />
             <Image
-              src="/logos/s-logo.jpg"
+              src="/logos/logo.svg"
               alt="S"
               width={48}
               height={48}
