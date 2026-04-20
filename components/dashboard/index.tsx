@@ -199,9 +199,9 @@ export function Dashboard() {
       />
 
       {/* Main Content Area */}
-      <main className="relative flex-1 overflow-hidden">
+      <main className="relative flex-1 overflow-hidden min-h-0">
         {/* Screen Content */}
-        <div className="h-full">
+        <div className="h-full flex flex-col">
           {currentScreen === 0 && (
             <ScreenPriceStatistics
               currentPrice={currentPrice}
