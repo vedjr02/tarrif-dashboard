@@ -2,12 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Zap, 
-  Battery, 
-  Home, 
-  Sun, 
-  TrendingDown, 
+import {
+  Zap,
+  Battery,
+  Home,
+  Sun,
   Clock,
   Droplets,
   Flame,
@@ -15,7 +14,6 @@ import {
   PiggyBank,
   ArrowRight,
   CheckCircle2,
-  XCircle,
 } from "lucide-react"
 import type { DayPrices, DayTariffs, CurrentPrice, CurrentTariff, Quintile } from "@/lib/types"
 import { getQuintileColor, QUINTILE_CONFIG } from "@/lib/types"
@@ -31,12 +29,11 @@ interface ScreenOperationsSavingsProps {
 
 const FLAT_RATE_EUR_KWH = 0.2638
 
-// Appliance data with consumption
 const APPLIANCES = [
-  { id: "ev", icon: Car, label: "EV Charging", subLabel: "60 kWh full charge", consumption: 60, color: "text-blue-500" },
-  { id: "heatpump", icon: Flame, label: "Heat Pump", subLabel: "2 kWh per hour", consumption: 2, color: "text-orange-500" },
-  { id: "washing", icon: Droplets, label: "Washing Machine", subLabel: "1.5 kWh per cycle", consumption: 1.5, color: "text-cyan-500" },
-  { id: "dryer", icon: Sun, label: "Tumble Dryer", subLabel: "2.5 kWh per cycle", consumption: 2.5, color: "text-yellow-500" },
+  { id: "ev", icon: Car, label: "EV Charging", subLabel: "60 kWh", consumption: 60, color: "text-blue-500" },
+  { id: "heatpump", icon: Flame, label: "Heat Pump", subLabel: "2 kWh/h", consumption: 2, color: "text-orange-500" },
+  { id: "washing", icon: Droplets, label: "Washer", subLabel: "1.5 kWh", consumption: 1.5, color: "text-cyan-500" },
+  { id: "dryer", icon: Sun, label: "Dryer", subLabel: "2.5 kWh", consumption: 2.5, color: "text-yellow-500" },
 ]
 
 export function ScreenOperationsSavings({
@@ -47,12 +44,11 @@ export function ScreenOperationsSavings({
   currentPeriodIndex,
 }: ScreenOperationsSavingsProps) {
   const quintileConfig = QUINTILE_CONFIG[currentPrice.quintile as Quintile]
-  
+
   const formatPeriodTime = (periodIndex: number) => {
     const period = dayPrices.periods[periodIndex]
     if (!period) return ""
-    const date = new Date(period.start_time_dublin)
-    return date.toLocaleTimeString("en-IE", {
+    return new Date(period.start_time_dublin).toLocaleTimeString("en-IE", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -60,237 +56,215 @@ export function ScreenOperationsSavings({
     })
   }
 
-  // Find best windows for different use cases
   const remainingPeriods = dayPrices.periods.slice(currentPeriodIndex)
   const cheapestWindow = findCheapestWindow(remainingPeriods, 4)
-  const bestChargingStart = formatPeriodTime(currentPeriodIndex + cheapestWindow.start)
-  const bestChargingEnd = formatPeriodTime(currentPeriodIndex + cheapestWindow.start + 4)
+  const bestStart = formatPeriodTime(currentPeriodIndex + cheapestWindow.start)
+  const bestEnd = formatPeriodTime(currentPeriodIndex + cheapestWindow.start + 4)
 
-  // Find expensive periods for export
   const expensivePeriods = remainingPeriods
     .map((p, idx) => ({ ...p, idx }))
     .filter((p) => p.quintile >= 4)
     .slice(0, 3)
 
-  // Calculate daily savings potential
-  const savingVsFlat = currentTariff 
+  const savingVsFlat = currentTariff
     ? FLAT_RATE_EUR_KWH - currentTariff.tariff_inc_vat_eur_kwh
     : 0
 
-  // Find cheapest tariff in upcoming periods
   const upcomingTariffs = dayTariffs?.periods.slice(currentPeriodIndex, Math.min(currentPeriodIndex + 12, 48))
-  const cheapestTariff = upcomingTariffs?.reduce((min, p) => 
+  const cheapestTariff = upcomingTariffs?.reduce((min, p) =>
     p.tariff_inc_vat_eur_kwh < min.tariff_inc_vat_eur_kwh ? p : min
   )
 
-  // Action recommendations
+  const isGoodPrice = currentPrice.quintile <= 2
+  const isHighPrice = currentPrice.quintile >= 4
+
   const actions = [
     {
-      icon: <Car className="h-12 w-12" />,
+      icon: Car,
       title: "EV Charging",
-      status: currentPrice.quintile <= 2 ? "GO" : "WAIT",
-      description: currentPrice.quintile <= 2
-        ? "Charge now! Current price is optimal."
-        : `Best window: ${bestChargingStart}–${bestChargingEnd}`,
-      saving: currentPrice.quintile <= 2 ? savingVsFlat * 60 : null,
-      color: currentPrice.quintile <= 2 ? "text-q1-cheap" : "text-accent",
+      status: isGoodPrice ? "GO" : "WAIT",
+      description: isGoodPrice ? "Charge now — optimal price" : `Best window: ${bestStart}–${bestEnd}`,
+      saving: isGoodPrice ? savingVsFlat * 60 : null,
+      good: isGoodPrice,
     },
     {
-      icon: <Battery className="h-12 w-12" />,
-      title: "Battery Storage",
-      status: currentPrice.quintile <= 2 ? "CHARGE" : currentPrice.quintile >= 4 ? "DISCHARGE" : "HOLD",
-      description: currentPrice.quintile <= 2
-        ? "Charge battery — prices are low."
-        : currentPrice.quintile >= 4
-        ? "Discharge now — maximize export value."
-        : "Hold — wait for better opportunity.",
+      icon: Battery,
+      title: "Battery",
+      status: isGoodPrice ? "CHARGE" : isHighPrice ? "DISCHARGE" : "HOLD",
+      description: isGoodPrice ? "Charge — prices are low" : isHighPrice ? "Discharge — export value" : "Hold for better opportunity",
       saving: null,
-      color: currentPrice.quintile <= 2 ? "text-q1-cheap" : currentPrice.quintile >= 4 ? "text-accent" : "text-muted-foreground",
+      good: isGoodPrice || isHighPrice,
     },
     {
-      icon: <Home className="h-12 w-12" />,
-      title: "Home Appliances",
-      status: currentPrice.quintile <= 2 ? "RUN NOW" : "SCHEDULE",
-      description: currentPrice.quintile <= 2
-        ? "Run high-consumption appliances now!"
-        : `Schedule for ${bestChargingStart}–${bestChargingEnd}`,
-      saving: currentPrice.quintile <= 2 ? savingVsFlat * 3 : null,
-      color: currentPrice.quintile <= 2 ? "text-q1-cheap" : "text-accent",
+      icon: Home,
+      title: "Appliances",
+      status: isGoodPrice ? "RUN NOW" : "SCHEDULE",
+      description: isGoodPrice ? "Run high-consumption loads!" : `Schedule for ${bestStart}–${bestEnd}`,
+      saving: isGoodPrice ? savingVsFlat * 3 : null,
+      good: isGoodPrice,
     },
     {
-      icon: <Sun className="h-12 w-12" />,
+      icon: Sun,
       title: "Solar Export",
-      status: currentPrice.quintile >= 4 ? "EXPORT" : "STORE",
+      status: isHighPrice ? "EXPORT" : "STORE",
       description: expensivePeriods.length > 0
-        ? `High prices at ${formatPeriodTime(currentPeriodIndex + expensivePeriods[0].idx)} — good export opportunity.`
-        : "No high-price windows remaining today.",
+        ? `High prices at ${formatPeriodTime(currentPeriodIndex + expensivePeriods[0].idx)}`
+        : "No high-price windows today",
       saving: null,
-      color: currentPrice.quintile >= 4 ? "text-accent" : "text-muted-foreground",
+      good: isHighPrice,
     },
   ]
 
-  // Calculate appliance costs
   const getApplianceCosts = (consumption: number) => {
-    const costNow = consumption * (currentTariff?.tariff_inc_vat_eur_kwh || currentPrice.price_eur_mwh / 1000)
+    const costNow = consumption * (currentTariff?.tariff_inc_vat_eur_kwh ?? currentPrice.price_eur_mwh / 1000)
     const costFixed = consumption * FLAT_RATE_EUR_KWH
-    const costBest = consumption * (cheapestTariff?.tariff_inc_vat_eur_kwh || currentPrice.price_eur_mwh / 1000)
-    return { costNow, costFixed, costBest, savingVsFixed: costFixed - costNow, savingVsBest: costNow - costBest }
+    return { costNow, savingVsFixed: costFixed - costNow }
   }
 
-  // Calculate total daily savings
-  const totalDailyUsage = 25 // kWh average household
-  const dailySavingVsFixed = savingVsFlat * totalDailyUsage
+  const dailySavingVsFixed = savingVsFlat * 25
   const monthlySavingVsFixed = dailySavingVsFixed * 30
 
   return (
-    <div className="flex h-full flex-col gap-6 p-8">
-      {/* Header with Current Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div 
-            className="flex h-24 w-24 items-center justify-center rounded-2xl"
+    <div className="flex h-full flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8">
+
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 lg:h-16 lg:w-16"
             style={{ backgroundColor: getQuintileColor(currentPrice.quintile as Quintile) }}
           >
-            <Zap className="h-14 w-14 text-background" />
+            <Zap className="h-5 w-5 text-background sm:h-8 sm:w-8 lg:h-9 lg:w-9" />
           </div>
           <div>
-            <h2 className="text-4xl font-bold text-foreground">Dynamic Pricing Operations</h2>
-            <p className="text-2xl text-muted-foreground mt-1">Real-time recommendations for maximum savings</p>
+            <h2 className="text-base font-bold text-foreground sm:text-xl lg:text-2xl">Dynamic Pricing Operations</h2>
+            <p className="text-xs text-muted-foreground sm:text-sm">Real-time recommendations for maximum savings</p>
           </div>
         </div>
-        
-        <Card className="border-2" style={{ borderColor: getQuintileColor(currentPrice.quintile as Quintile) }}>
-          <CardContent className="flex items-center gap-6 p-6">
+
+        <Card className="shrink-0 border-2" style={{ borderColor: getQuintileColor(currentPrice.quintile as Quintile) }}>
+          <CardContent className="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
             <div className="text-center">
-              <span className="text-lg text-muted-foreground">Current Signal</span>
-              <div 
-                className="text-3xl font-bold mt-1"
-                style={{ color: getQuintileColor(currentPrice.quintile as Quintile) }}
-              >
+              <span className="block text-xs text-muted-foreground">Signal</span>
+              <div className="text-lg font-bold sm:text-2xl" style={{ color: getQuintileColor(currentPrice.quintile as Quintile) }}>
                 {quintileConfig.signal}
               </div>
             </div>
-            <div className="h-16 w-px bg-border" />
+            <div className="h-10 w-px bg-border" />
             <div className="text-center">
-              <span className="text-lg text-muted-foreground">Price</span>
-              <div className="text-3xl font-bold text-foreground mt-1">
-                €{currentPrice.price_eur_mwh.toFixed(2)}/MWh
+              <span className="block text-xs text-muted-foreground">Price</span>
+              <div className="text-base font-bold text-foreground sm:text-xl">
+                €{currentPrice.price_eur_mwh.toFixed(1)}<span className="text-xs font-normal text-muted-foreground">/MWh</span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Grid: Actions and Savings */}
-      <div className="grid flex-1 grid-cols-3 gap-6">
-        {/* Left Column: Action Recommendations */}
-        <div className="col-span-2 grid grid-cols-2 gap-4">
-          {actions.map((action, index) => (
-            <Card 
-              key={index}
-              className="border-2 transition-all hover:scale-[1.02]"
-              style={{ 
-                borderLeftWidth: "6px",
-                borderLeftColor: action.status === "GO" || action.status === "CHARGE" || action.status === "RUN NOW" || action.status === "EXPORT"
-                  ? getQuintileColor(currentPrice.quintile as Quintile)
-                  : "var(--border)",
-              }}
-            >
-              <CardContent className="flex h-full flex-col p-6">
-                <div className="flex items-start justify-between">
-                  <div className={action.color}>
-                    {action.icon}
+      {/* Main Grid */}
+      <div className="grid flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3 lg:gap-5">
+
+        {/* Action Cards: 2x2 on sm+, stacked on mobile */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:col-span-2 lg:gap-4">
+          {actions.map((action, index) => {
+            const Icon = action.icon
+            return (
+              <Card
+                key={index}
+                className="border-2 transition-all"
+                style={{
+                  borderLeftWidth: "4px",
+                  borderLeftColor: action.good
+                    ? getQuintileColor(currentPrice.quintile as Quintile)
+                    : "var(--border)",
+                }}
+              >
+                <CardContent className="flex h-full flex-col p-3 sm:p-4 lg:p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <Icon className={`h-6 w-6 shrink-0 sm:h-8 sm:w-8 ${action.good ? "text-primary" : "text-muted-foreground"}`} />
+                    <Badge
+                      className="shrink-0 text-xs px-2 py-0.5"
+                      variant={action.good ? "default" : "secondary"}
+                      style={action.good ? { backgroundColor: getQuintileColor(currentPrice.quintile as Quintile) } : undefined}
+                    >
+                      {action.status}
+                    </Badge>
                   </div>
-                  <Badge 
-                    className="text-lg px-4 py-1"
-                    variant={action.status === "GO" || action.status === "CHARGE" || action.status === "RUN NOW" || action.status === "EXPORT" ? "default" : "secondary"}
-                    style={{
-                      backgroundColor: action.status === "GO" || action.status === "CHARGE" || action.status === "RUN NOW" || action.status === "EXPORT"
-                        ? getQuintileColor(currentPrice.quintile as Quintile)
-                        : undefined,
-                    }}
-                  >
-                    {action.status}
-                  </Badge>
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mt-4">{action.title}</h3>
-                <p className="text-lg text-muted-foreground mt-2 flex-1">{action.description}</p>
-                {action.saving !== null && action.saving > 0 && (
-                  <div className="mt-4 flex items-center gap-2 text-q1-cheap">
-                    <PiggyBank className="h-6 w-6" />
-                    <span className="text-xl font-bold">Save €{action.saving.toFixed(2)}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  <h3 className="mt-2 text-sm font-bold text-foreground sm:text-base lg:text-lg">{action.title}</h3>
+                  <p className="mt-1 flex-1 text-xs text-muted-foreground sm:text-sm">{action.description}</p>
+                  {action.saving !== null && action.saving > 0 && (
+                    <div className="mt-2 flex items-center gap-1 text-primary">
+                      <PiggyBank className="h-4 w-4" />
+                      <span className="text-xs font-bold sm:text-sm">Save €{action.saving.toFixed(2)}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
-        {/* Right Column: Savings Summary */}
-        <div className="flex flex-col gap-4">
-          {/* Savings Overview Card */}
-          <Card className="border-q1-cheap bg-q1-cheap/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-3 text-2xl">
-                <PiggyBank className="h-8 w-8 text-q1-cheap" />
+        {/* Right Column: Savings + Appliances */}
+        <div className="flex flex-col gap-3 sm:gap-4">
+          {/* Savings Card */}
+          <Card className="border-primary bg-primary/5">
+            <CardHeader className="pb-1 pt-3 px-3 sm:px-4">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <PiggyBank className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
                 Savings Potential
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
               <div className="flex items-center justify-between">
-                <span className="text-lg text-muted-foreground">Current vs Fixed:</span>
-                <span className={`text-2xl font-bold ${savingVsFlat > 0 ? "text-q1-cheap" : "text-destructive"}`}>
-                  {savingVsFlat > 0 ? "+" : ""}{(savingVsFlat * 100).toFixed(2)} c/kWh
+                <span className="text-xs text-muted-foreground">vs Fixed rate:</span>
+                <span className={`text-sm font-bold sm:text-base ${savingVsFlat > 0 ? "text-primary" : "text-destructive"}`}>
+                  {savingVsFlat > 0 ? "+" : ""}{(savingVsFlat * 100).toFixed(2)}c/kWh
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-lg text-muted-foreground">Daily (25 kWh):</span>
-                <span className={`text-2xl font-bold ${dailySavingVsFixed > 0 ? "text-q1-cheap" : "text-destructive"}`}>
+                <span className="text-xs text-muted-foreground">Daily (25 kWh):</span>
+                <span className={`text-sm font-bold sm:text-base ${dailySavingVsFixed > 0 ? "text-primary" : "text-destructive"}`}>
                   €{dailySavingVsFixed.toFixed(2)}
                 </span>
               </div>
-              <div className="border-t border-border pt-4 flex items-center justify-between">
-                <span className="text-xl font-semibold text-foreground">Monthly Est:</span>
-                <span className={`text-3xl font-bold ${monthlySavingVsFixed > 0 ? "text-q1-cheap" : "text-destructive"}`}>
+              <div className="flex items-center justify-between border-t border-border pt-2">
+                <span className="text-xs font-semibold text-foreground sm:text-sm">Monthly Est:</span>
+                <span className={`text-base font-bold sm:text-xl ${monthlySavingVsFixed > 0 ? "text-primary" : "text-destructive"}`}>
                   €{monthlySavingVsFixed.toFixed(2)}
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Appliance Cost Calculator */}
+          {/* Appliance Costs */}
           <Card className="flex-1">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xl">Appliance Costs Now</CardTitle>
+            <CardHeader className="pb-1 pt-3 px-3 sm:px-4">
+              <CardTitle className="text-sm sm:text-base">Appliance Costs Now</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
               {APPLIANCES.map((appliance) => {
                 const costs = getApplianceCosts(appliance.consumption)
                 const Icon = appliance.icon
-                const isGoodTime = currentPrice.quintile <= 2
-                
                 return (
-                  <div key={appliance.id} className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-                    <div className="flex items-center gap-3">
-                      <Icon className={`h-8 w-8 ${appliance.color}`} />
+                  <div key={appliance.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-2 py-2 sm:px-3">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-5 w-5 shrink-0 ${appliance.color}`} />
                       <div>
-                        <span className="font-semibold text-foreground">{appliance.label}</span>
-                        <span className="text-sm text-muted-foreground block">{appliance.subLabel}</span>
+                        <span className="block text-xs font-semibold text-foreground sm:text-sm">{appliance.label}</span>
+                        <span className="text-xs text-muted-foreground">{appliance.subLabel}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                       <div className="text-right">
-                        <span className="text-xl font-bold text-foreground">€{costs.costNow.toFixed(2)}</span>
+                        <span className="block text-sm font-bold text-foreground sm:text-base">€{costs.costNow.toFixed(2)}</span>
                         {costs.savingVsFixed > 0 && (
-                          <span className="text-sm text-q1-cheap block">
-                            Save €{costs.savingVsFixed.toFixed(2)}
-                          </span>
+                          <span className="block text-xs text-primary">-€{costs.savingVsFixed.toFixed(2)}</span>
                         )}
                       </div>
-                      {isGoodTime ? (
-                        <CheckCircle2 className="h-8 w-8 text-q1-cheap" />
+                      {isGoodPrice ? (
+                        <CheckCircle2 className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
                       ) : (
-                        <Clock className="h-8 w-8 text-muted-foreground" />
+                        <Clock className="h-4 w-4 text-muted-foreground sm:h-5 sm:w-5" />
                       )}
                     </div>
                   </div>
@@ -301,30 +275,26 @@ export function ScreenOperationsSavings({
         </div>
       </div>
 
-      {/* Footer: Best Time Windows */}
+      {/* Best Window Footer */}
       <Card className="bg-muted/30">
-        <CardContent className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <Clock className="h-8 w-8 text-primary" />
-              <div>
-                <span className="text-lg text-muted-foreground">Best Charging Window</span>
-                <span className="text-2xl font-bold text-foreground block">
-                  {bestChargingStart} – {bestChargingEnd}
-                </span>
-              </div>
-            </div>
-            <ArrowRight className="h-6 w-6 text-muted-foreground" />
+        <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Clock className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
             <div>
-              <span className="text-lg text-muted-foreground">Average Price</span>
-              <span className="text-2xl font-bold text-primary block">
+              <span className="block text-xs text-muted-foreground">Best Charging Window</span>
+              <span className="text-sm font-bold text-foreground sm:text-base">
+                {bestStart} – {bestEnd}
+              </span>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <span className="block text-xs text-muted-foreground">Avg Price</span>
+              <span className="text-sm font-bold text-primary sm:text-base">
                 €{cheapestWindow.avgPrice.toFixed(2)}/MWh
               </span>
             </div>
           </div>
-          <div className="text-lg text-muted-foreground">
-            Data Source: Semo PX | Updated in real-time
-          </div>
+          <span className="text-xs text-muted-foreground">Semo PX &middot; Updated in real-time</span>
         </CardContent>
       </Card>
     </div>
