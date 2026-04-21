@@ -70,153 +70,132 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-20 items-center justify-between px-6">
-        {/* Left: Partner Logos */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 border-r border-border pr-4">
-            <Image
-              src="/logos/adflex.jpeg"
-              alt="HD Flex"
-              width={48}
-              height={48}
-              className="rounded-lg object-contain"
-            />
-            <Image
-              src="/logos/iresi.png"
-              alt="Hai Resi"
-              width={192}
-              height={48}
-              className="rounded-lg object-contain"
-            />
-            <Image
-              src="/logos/logo.svg"
-              alt="S"
-              width={144}
-              height={48}
-              className="rounded-lg object-contain"
-            />
+      <div className="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-6 sm:h-20 sm:py-0">
+
+        {/* Top row on mobile: logos + controls */}
+        <div className="flex items-center justify-between gap-3 sm:contents">
+
+          {/* Left: Partner Logos + Title */}
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+            {/* Logos — shrink but never overflow */}
+            <div className="flex shrink-0 items-center gap-2 border-r border-border pr-3 sm:gap-3 sm:pr-4">
+              <Image
+                src="/logos/adflex.jpeg"
+                alt="HD Flex"
+                width={36}
+                height={36}
+                className="rounded-md object-contain sm:h-11 sm:w-11"
+              />
+              <Image
+                src="/logos/iresi.png"
+                alt="Hai Resi"
+                width={80}
+                height={32}
+                className="h-7 w-auto rounded-md object-contain sm:h-10 sm:w-auto"
+                style={{ maxWidth: "120px" }}
+              />
+              <Image
+                src="/logos/logo.svg"
+                alt="S"
+                width={56}
+                height={32}
+                className="h-7 w-auto rounded-md object-contain sm:h-10 sm:w-auto"
+                style={{ maxWidth: "80px" }}
+              />
+            </div>
+
+            {/* Title — truncates gracefully on small screens */}
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-sm font-bold text-foreground tracking-tight sm:text-xl md:text-2xl">
+                ADFLEX Dynamic Price Dashboard
+              </span>
+              <span className="hidden text-xs text-muted-foreground sm:block sm:text-sm">
+                Powered by Semo PX Data
+              </span>
+            </div>
           </div>
 
-          {/* Dashboard Title */}
-          <div className="flex flex-col">
-            <span className="text-2xl font-bold text-foreground tracking-tight">
-              ADFLEX Dynamic Price Dashboard
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Powered by Semo PX Data
-            </span>
-          </div>
-        </div>
-
-        {/* Center: Dublin Clock - Large for big screens */}
-        <div className="hidden flex-col items-center lg:flex">
-          <span className="font-mono text-4xl font-bold text-foreground tracking-wider">
-            {dublinTime}
-          </span>
-          <span className="text-lg text-muted-foreground font-medium">
-            {dublinDate}
-          </span>
-        </div>
-
-        {/* Right: Controls */}
-        <div className="flex items-center gap-3">
-          {/* Live Status Indicator */}
-          <div className="hidden items-center gap-2 sm:flex bg-muted/50 rounded-lg px-4 py-2">
-            <div className="relative flex items-center gap-1.5">
+          {/* Right: Controls — always visible */}
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Live Status */}
+            <div className="hidden items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 sm:flex">
               <span
-                className={`h-3 w-3 rounded-full ${
+                className={`h-2.5 w-2.5 rounded-full ${
                   backendStatus === "ok"
-                    ? "bg-primary animate-pulse"
+                    ? "animate-pulse bg-primary"
                     : backendStatus === "stale"
                       ? "bg-accent"
                       : "bg-destructive"
                 }`}
               />
               <span className="text-sm font-semibold text-foreground">
-                {backendStatus === "ok"
-                  ? "LIVE"
-                  : backendStatus === "stale"
-                    ? `STALE`
-                    : "ERROR"}
+                {backendStatus === "ok" ? "LIVE" : backendStatus === "stale" ? "STALE" : "ERROR"}
               </span>
+              {lastUpdate && backendStatus !== "ok" && (
+                <span className="text-xs text-muted-foreground">({lastUpdate})</span>
+              )}
             </div>
-            {lastUpdate && backendStatus !== "ok" && (
-              <span className="text-xs text-muted-foreground">
-                ({lastUpdate})
-              </span>
+
+            {onToggleAutoRotate && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onToggleAutoRotate}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+                title={isAutoRotating ? "Pause auto-rotation" : "Resume auto-rotation"}
+              >
+                {isAutoRotating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span className="sr-only">{isAutoRotating ? "Pause" : "Play"} auto-rotation</span>
+              </Button>
             )}
+
+            {onToggleFullscreen && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onToggleFullscreen}
+                className="hidden h-8 w-8 sm:flex sm:h-10 sm:w-10"
+                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                <span className="sr-only">{isFullscreen ? "Exit" : "Enter"} fullscreen</span>
+              </Button>
+            )}
+
+            {mounted && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span className="sr-only">Toggle theme</span>
+              </Button>
+            )}
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onSettingsClick}
+              className="h-8 w-8 sm:h-10 sm:w-10"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
           </div>
-
-          {/* Auto Rotate Toggle */}
-          {onToggleAutoRotate && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onToggleAutoRotate}
-              className="h-10 w-10"
-              title={
-                isAutoRotating ? "Pause auto-rotation" : "Resume auto-rotation"
-              }
-            >
-              {isAutoRotating ? (
-                <Pause className="h-5 w-5" />
-              ) : (
-                <Play className="h-5 w-5" />
-              )}
-              <span className="sr-only">
-                {isAutoRotating ? "Pause" : "Play"} auto-rotation
-              </span>
-            </Button>
-          )}
-
-          {/* Fullscreen Toggle */}
-          {onToggleFullscreen && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onToggleFullscreen}
-              className="h-10 w-10"
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="h-5 w-5" />
-              ) : (
-                <Maximize2 className="h-5 w-5" />
-              )}
-              <span className="sr-only">
-                {isFullscreen ? "Exit" : "Enter"} fullscreen
-              </span>
-            </Button>
-          )}
-
-          {/* Theme Toggle */}
-          {mounted && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="h-10 w-10"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )}
-              <span className="sr-only">Toggle theme</span>
-            </Button>
-          )}
-
-          {/* Settings */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onSettingsClick}
-            className="h-10 w-10"
-          >
-            <Settings className="h-5 w-5" />
-            <span className="sr-only">Settings</span>
-          </Button>
         </div>
+
+        {/* Center: Dublin Clock — second row on mobile, centered column on desktop */}
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-2 sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:flex-col sm:items-center sm:gap-0 sm:border-0 sm:pt-0">
+          <span className="font-mono text-xl font-bold text-foreground tracking-wider sm:text-3xl lg:text-4xl">
+            {dublinTime}
+          </span>
+          <span className="text-xs text-muted-foreground sm:text-sm lg:text-base">
+            {dublinDate}
+          </span>
+        </div>
+
       </div>
     </header>
   );

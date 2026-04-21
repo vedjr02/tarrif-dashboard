@@ -236,45 +236,47 @@ export function Dashboard() {
         <Button
           variant="ghost"
           size="icon"
-          className="absolute left-4 top-1/2 -translate-y-1/2 h-16 w-16 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur-sm border border-border"
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur-sm border border-border sm:left-4 sm:h-14 sm:w-14"
           onClick={prevScreen}
         >
-          <ChevronLeft className="h-10 w-10" />
+          <ChevronLeft className="h-5 w-5 sm:h-8 sm:w-8" />
           <span className="sr-only">Previous screen</span>
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="absolute right-4 top-1/2 -translate-y-1/2 h-16 w-16 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur-sm border border-border"
+          className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 backdrop-blur-sm border border-border sm:right-4 sm:h-14 sm:w-14"
           onClick={nextScreen}
         >
-          <ChevronRight className="h-10 w-10" />
+          <ChevronRight className="h-5 w-5 sm:h-8 sm:w-8" />
           <span className="sr-only">Next screen</span>
         </Button>
 
         {/* Screen Indicators */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:bottom-6 sm:gap-3">
           {SCREENS.map((screen, index) => (
             <button
               key={screen.id}
               onClick={() => goToScreen(index)}
-              className={`flex items-center gap-2 rounded-full px-6 py-3 text-lg font-medium transition-all ${
+              className={`flex items-center gap-1.5 rounded-full transition-all sm:gap-2 ${
                 currentScreen === index
-                  ? "bg-primary text-primary-foreground scale-110"
-                  : "bg-muted/80 text-muted-foreground hover:bg-muted"
+                  ? "bg-primary text-primary-foreground scale-105 px-3 py-1.5 text-xs font-semibold sm:px-5 sm:py-2.5 sm:text-sm"
+                  : "bg-muted/80 text-muted-foreground hover:bg-muted px-2 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm"
               }`}
             >
-              <span className={`h-3 w-3 rounded-full ${currentScreen === index ? "bg-primary-foreground" : "bg-muted-foreground"}`} />
-              {screen.label}
+              <span className={`h-2 w-2 shrink-0 rounded-full ${currentScreen === index ? "bg-primary-foreground" : "bg-muted-foreground"}`} />
+              <span className="hidden sm:inline">{screen.label}</span>
+              <span className="sm:hidden">{index + 1}</span>
             </button>
           ))}
         </div>
 
         {/* Auto-rotation indicator */}
         {isAutoRotating && (
-          <div className="absolute bottom-6 right-6 flex items-center gap-2 rounded-full bg-muted/80 px-4 py-2 text-sm text-muted-foreground">
-            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-            Auto-rotating every {rotationInterval / 1000}s
+          <div className="absolute bottom-4 right-3 flex items-center gap-1.5 rounded-full bg-muted/80 px-2.5 py-1 text-xs text-muted-foreground sm:bottom-6 sm:right-6 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse sm:h-2 sm:w-2" />
+            <span className="hidden sm:inline">Auto-rotating every {rotationInterval / 1000}s</span>
+            <span className="sm:hidden">{rotationInterval / 1000}s</span>
           </div>
         )}
       </main>
