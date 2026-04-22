@@ -1,27 +1,33 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import useSWR from "swr"
 import { Header } from "./header"
 import { Footer } from "./footer"
 import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
 import { ScreenPriceCurve } from "./screens/screen-price-curve"
 import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
-import {
-  getTodayPrices,
-  getTomorrowPrices,
-  getYesterdayPrices,
-  getCurrentPeriod,
-  getHistoricalData,
-  getBackendStatus,
-  getTodayTariffs,
-  getTomorrowTariffs,
-  getYesterdayTariffs,
-  getCurrentTariff,
-} from "@/lib/mock-data"
-import type { DayPrices, CurrentPrice, HistoryDay, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
+import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
+
+interface PricesApiResponse {
+  todayPrices: DayPrices
+  tomorrowPrices: DayPrices | null
+  yesterdayPrices: DayPrices
+  todayTariffs: DayTariffs
+  tomorrowTariffs: DayTariffs | null
+  yesterdayTariffs: DayTariffs
+  currentPrice: CurrentPrice
+  currentTariff: CurrentTariff
+  currentPeriodIndex: number
+  backendStatus: BackendStatus
+  fetchedAt: string
+}
+
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
@@ -32,17 +38,8 @@ const SCREENS = [
 const DEFAULT_ROTATION_INTERVAL = 15000 // 15 seconds
 
 export function Dashboard() {
-  const [todayPrices, setTodayPrices] = useState<DayPrices | null>(null)
-  const [tomorrowPrices, setTomorrowPrices] = useState<DayPrices | null>(null)
-  const [yesterdayPrices, setYesterdayPrices] = useState<DayPrices | null>(null)
-  const [todayTariffs, setTodayTariffs] = useState<DayTariffs | null>(null)
-  const [currentPrice, setCurrentPrice] = useState<CurrentPrice | null>(null)
-  const [currentTariff, setCurrentTariff] = useState<CurrentTariff | null>(null)
-  const [historyData, setHistoryData] = useState<HistoryDay[]>([])
-  const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
-  const [currentPeriodIndex, setCurrentPeriodIndex] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [currentPeriodIndex, setCurrentPeriodIndex] = useState(0)
   
   // Carousel state
   const [currentScreen, setCurrentScreen] = useState(0)
@@ -50,41 +47,25 @@ export function Dashboard() {
   const [rotationInterval, setRotationInterval] = useState(DEFAULT_ROTATION_INTERVAL)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const fetchData = useCallback(() => {
-    const today = getTodayPrices()
-    const tomorrow = getTomorrowPrices()
-    const yesterday = getYesterdayPrices()
-    const current = getCurrentPeriod(today)
-    const todayTariff = getTodayTariffs()
-    const currentTariffData = getCurrentTariff(todayTariff)
-    const history = getHistoricalData(30)
-    const status = getBackendStatus()
+  // Fetch real-time data from SEMO PX API
+  const { data, error, isLoading } = useSWR<PricesApiResponse>(
+    "/api/prices",
+    fetcher,
+    {
+      refreshInterval: 60000, // Refresh every 60 seconds
+      revalidateOnFocus: true,
+      dedupingInterval: 30000,
+    }
+  )
 
-    setTodayPrices(today)
-    setTomorrowPrices(tomorrow)
-    setYesterdayPrices(yesterday)
-    setCurrentPrice(current)
-    setTodayTariffs(todayTariff)
-    setCurrentTariff(currentTariffData)
-    setHistoryData(history)
-    setBackendStatus(status)
-    setCurrentPeriodIndex(current.period - 1)
-    setLastRefresh(new Date())
-  }, [])
-
-  // Initial fetch
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  // Auto-refresh every 60 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchData()
-    }, 60000)
-
-    return () => clearInterval(interval)
-  }, [fetchData])
+  // Extract data from API response
+  const todayPrices = data?.todayPrices ?? null
+  const tomorrowPrices = data?.tomorrowPrices ?? null
+  const yesterdayPrices = data?.yesterdayPrices ?? null
+  const todayTariffs = data?.todayTariffs ?? null
+  const currentPrice = data?.currentPrice ?? null
+  const currentTariff = data?.currentTariff ?? null
+  const backendStatus = data?.backendStatus ?? null
 
   // Update current period index every minute
   useEffect(() => {
@@ -160,12 +141,29 @@ export function Dashboard() {
   const nextScreen = () => goToScreen((currentScreen + 1) % SCREENS.length)
   const prevScreen = () => goToScreen((currentScreen - 1 + SCREENS.length) % SCREENS.length)
 
-  if (!todayPrices || !currentPrice || !yesterdayPrices || !backendStatus || !todayTariffs || !currentTariff) {
+  // Loading state
+  if (isLoading || !todayPrices || !currentPrice || !yesterdayPrices || !backendStatus || !todayTariffs || !currentTariff) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-xl text-muted-foreground">Loading pricing data from Semo PX...</p>
+          <p className="text-lg text-muted-foreground sm:text-xl">Loading real-time pricing data...</p>
+          <p className="text-xs text-muted-foreground/70 mt-2 sm:text-sm">Source: SEMO PX Day-Ahead Market</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 rounded-full bg-destructive/20 flex items-center justify-center mx-auto">
+            <span className="text-2xl">!</span>
+          </div>
+          <p className="text-lg text-destructive sm:text-xl">Failed to load pricing data</p>
+          <p className="text-xs text-muted-foreground mt-2 sm:text-sm">Please check your connection and refresh</p>
         </div>
       </div>
     )
@@ -217,7 +215,9 @@ export function Dashboard() {
               todayPrices={todayPrices}
               todayTariffs={todayTariffs}
               tomorrowPrices={tomorrowPrices}
+              tomorrowTariffs={data?.tomorrowTariffs ?? null}
               yesterdayPrices={yesterdayPrices}
+              yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
             />
           )}
