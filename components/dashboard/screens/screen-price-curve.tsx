@@ -108,7 +108,7 @@ export function ScreenPriceCurve({
   const avgSavingPercent = ((totalIrishCost - totalDynamicCost) / totalIrishCost) * 100
 
   return (
-    <div className="flex h-full flex-1 flex-col gap-3 p-3 min-h-0 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8">
+    <div className="flex flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8 overflow-auto">
 
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -167,9 +167,9 @@ export function ScreenPriceCurve({
       </div>
 
       {/* Main Chart */}
-      <Card className="flex-1 min-h-0 overflow-hidden">
-        <CardContent className="h-full p-2 sm:p-4 lg:p-6">
-          <div className="w-full" style={{ height: "300px", minHeight: "220px" }}>
+      <Card className="overflow-hidden">
+        <CardContent className="p-2 sm:p-4 lg:p-6">
+          <div className="w-full h-[250px] sm:h-[300px] lg:h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <defs>
