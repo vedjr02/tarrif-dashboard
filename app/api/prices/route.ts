@@ -6,12 +6,23 @@ const FLAT_MARKUP_EUR_MWH = 20
 const MARKUP_PCT = 0.03
 const VAT_RATE = 0.09
 
+// Ireland bidding zone in ENTSO-E
+const IRELAND_BIDDING_ZONE = "10Y1001A1001A016" // SEM (Single Electricity Market)
+
 // Format date as YYYY-MM-DD
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0]
 }
 
-// Get Dublin date string for a given offset from today
+// Format date for ENTSO-E API (YYYYMMDDHHMM)
+function formatEntsoeDate(date: Date): string {
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(date.getUTCDate()).padStart(2, "0")
+  return `${year}${month}${day}0000`
+}
+
+// Get Dublin date for a given offset
 function getDublinDate(daysOffset = 0): string {
   const now = new Date()
   const dublinTime = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Dublin" }))
@@ -46,50 +57,133 @@ function calculateTariff(spotPrice: number): { tariff_eur_mwh: number; tariff_eu
   }
 }
 
-// Parse SEMO CSV and extract ROI-DA (Republic of Ireland) EUR prices
+// Parse ENTSO-E XML response to extract Day-Ahead prices
+function parseEntsoeXml(xmlContent: string, tradingDay: string): number[] | null {
+  try {
+    // Extract all price points from the XML
+    const prices: { position: number; price: number }[] = []
+    
+    // Find TimeSeries with A44 (Day-ahead prices)
+    const timeSeriesMatches = xmlContent.match(/<TimeSeries>[\s\S]*?<\/TimeSeries>/g)
+    if (!timeSeriesMatches) return null
+    
+    for (const ts of timeSeriesMatches) {
+      // Check if this is a price time series (not volumes)
+      if (!ts.includes("A62") && !ts.includes("price")) continue
+      
+      // Extract period
+      const periodMatch = ts.match(/<Period>[\s\S]*?<\/Period>/g)
+      if (!periodMatch) continue
+      
+      for (const period of periodMatch) {
+        // Check if this period covers our trading day
+        const startMatch = period.match(/<start>([\d\-T:Z]+)<\/start>/)
+        if (startMatch) {
+          const startDate = startMatch[1].split("T")[0]
+          // Only process if this is for the correct day
+          if (startDate !== tradingDay) continue
+        }
+        
+        // Extract all points
+        const pointMatches = period.match(/<Point>[\s\S]*?<\/Point>/g)
+        if (!pointMatches) continue
+        
+        for (const point of pointMatches) {
+          const posMatch = point.match(/<position>(\d+)<\/position>/)
+          const priceMatch = point.match(/<price\.amount>([\d.]+)<\/price\.amount>/)
+          
+          if (posMatch && priceMatch) {
+            prices.push({
+              position: parseInt(posMatch[1]),
+              price: parseFloat(priceMatch[2]),
+            })
+          }
+        }
+      }
+    }
+    
+    if (prices.length === 0) return null
+    
+    // Sort by position and return prices
+    prices.sort((a, b) => a.position - b.position)
+    return prices.map(p => p.price)
+  } catch {
+    return null
+  }
+}
+
+// Fetch prices from ENTSO-E Transparency Platform
+async function fetchEntsoePrices(tradingDay: string): Promise<PricePeriod[] | null> {
+  const token = process.env.ENTSOE_API_TOKEN
+  if (!token) {
+    return null
+  }
+  
+  try {
+    const startDate = new Date(tradingDay + "T00:00:00Z")
+    const endDate = new Date(tradingDay + "T23:59:59Z")
+    endDate.setDate(endDate.getDate() + 1)
+    
+    const url = `https://web-api.tp.entsoe.eu/api?documentType=A44&in_Domain=${IRELAND_BIDDING_ZONE}&out_Domain=${IRELAND_BIDDING_ZONE}&periodStart=${formatEntsoeDate(startDate)}&periodEnd=${formatEntsoeDate(endDate)}&securityToken=${token}`
+    
+    const response = await fetch(url, { next: { revalidate: 300 } })
+    
+    if (!response.ok) {
+      return null
+    }
+    
+    const xmlContent = await response.text()
+    const hourlyPrices = parseEntsoeXml(xmlContent, tradingDay)
+    
+    if (!hourlyPrices || hourlyPrices.length < 20) {
+      return null
+    }
+    
+    // Convert to half-hourly periods
+    return convertToPeriods(tradingDay, hourlyPrices, "ENTSOE")
+  } catch {
+    return null
+  }
+}
+
+// Parse SEMO CSV and extract ROI-DA prices
 function parseSemoCsv(csvContent: string): number[] | null {
   try {
     const lines = csvContent.split('\n')
     let inRoiSection = false
     let foundEurPrices = false
-    let nextLineIsPrices = false
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim()
       
-      // Find ROI-DA section
       if (line.startsWith('Market Area;ROI-DA')) {
         inRoiSection = true
         foundEurPrices = false
         continue
       }
       
-      // Reset if we hit another market area
       if (inRoiSection && line.startsWith('Market Area;') && !line.includes('ROI-DA')) {
         inRoiSection = false
         continue
       }
       
-      // Find EUR prices line in ROI section
       if (inRoiSection && line.startsWith('Index prices;60;EUR')) {
         foundEurPrices = true
-        nextLineIsPrices = true
         continue
       }
       
-      // Skip the timestamps line (contains dates like 2025-04-26T22:00:00Z)
-      if (nextLineIsPrices && line.includes('T') && line.includes('Z')) {
-        nextLineIsPrices = false
+      // Skip timestamp line
+      if (foundEurPrices && line.includes('T') && line.includes('Z')) {
         continue
       }
       
-      // This should be the prices line (values like 87,000;82,650;...)
-      if (inRoiSection && foundEurPrices && !nextLineIsPrices && !line.includes('T') && line.includes(';')) {
+      // Parse prices line
+      if (inRoiSection && foundEurPrices && line.includes(';') && !line.includes('T')) {
         const priceStrings = line.split(';').filter(s => s.trim() && !isNaN(parseFloat(s.replace(',', '.'))))
         
         if (priceStrings.length >= 20) {
           const prices = priceStrings.map(p => parseFloat(p.replace(',', '.')))
-          if (prices.length >= 20 && prices.every(p => !isNaN(p) && p >= 0)) {
+          if (prices.every(p => !isNaN(p) && p >= 0)) {
             return prices
           }
         }
@@ -102,11 +196,12 @@ function parseSemoCsv(csvContent: string): number[] | null {
   }
 }
 
-// Fetch real DAM prices from SEMO
+// Fetch real DAM prices from SEMO for a specific date
 async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null> {
   try {
-    // Search for the most recent DAM report
-    const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=MarketResult_SEM-DA&page_size=5&sort_by=PublishTime%20desc`
+    // Search for reports that cover the trading day
+    // SEMO report names contain the delivery date
+    const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=MarketResult_SEM-DA&page_size=30&sort_by=PublishTime%20desc`
     
     const searchResponse = await fetch(searchUrl, {
       headers: { "Accept": "application/json" },
@@ -123,9 +218,35 @@ async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null
       return null
     }
     
-    // Use the most recent report
-    const report = searchData.items[0]
-    const csvUrl = `https://reports.sem-o.com/documents/${report.ResourceName}`
+    // Find report for the specific trading day
+    // Report format: MarketResult_SEM-DA_PWR-MRC-D+1_YYYYMMDDHHMMSS_...
+    // The DateRetention field should match the delivery day
+    const targetDate = tradingDay.replace(/-/g, '')
+    
+    // Look for report with matching date
+    let selectedReport = null
+    for (const report of searchData.items) {
+      // Check DateRetention field which indicates the delivery date
+      const retentionDate = report.DateRetention?.replace(/-/g, '') || ''
+      if (retentionDate.startsWith(targetDate)) {
+        selectedReport = report
+        break
+      }
+      
+      // Also check if the filename contains the date
+      const resourceName = report.ResourceName || ''
+      if (resourceName.includes(targetDate.substring(0, 8))) {
+        selectedReport = report
+        break
+      }
+    }
+    
+    // If no exact match, use most recent (for tomorrow which may not be published yet)
+    if (!selectedReport) {
+      selectedReport = searchData.items[0]
+    }
+    
+    const csvUrl = `https://reports.sem-o.com/documents/${selectedReport.ResourceName}`
     
     const csvResponse = await fetch(csvUrl, { next: { revalidate: 300 } })
     if (!csvResponse.ok) {
@@ -139,38 +260,42 @@ async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null
       return null
     }
     
-    // Convert hourly to half-hourly periods (duplicate each hour price)
-    const periods: PricePeriod[] = []
-    
-    for (let i = 0; i < 48; i++) {
-      const hourIndex = Math.floor(i / 2)
-      const price = hourlyPrices[hourIndex] ?? hourlyPrices[Math.min(hourIndex, hourlyPrices.length - 1)] ?? 80
-      
-      const hour = Math.floor(i / 2)
-      const minute = (i % 2) * 30
-      const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-      
-      const startDate = new Date(`${tradingDay}T${startTime}:00+01:00`)
-      const utcDate = new Date(startDate.getTime() - 60 * 60 * 1000)
-      
-      periods.push({
-        period: i + 1,
-        start_time_utc: utcDate.toISOString(),
-        start_time_dublin: startDate.toISOString(),
-        price_eur_mwh: Math.round(price * 100) / 100,
-        quintile: 3 as 1 | 2 | 3 | 4 | 5,
-        source: "SEMOPX" as const,
-      })
-    }
-    
-    calculateQuintiles(periods)
-    return periods
+    return convertToPeriods(tradingDay, hourlyPrices, "SEMOPX")
   } catch {
     return null
   }
 }
 
-// Generate realistic fallback prices based on Irish market patterns
+// Convert hourly prices to half-hourly periods
+function convertToPeriods(tradingDay: string, hourlyPrices: number[], source: "SEMOPX" | "ENTSOE" | "Interpolated"): PricePeriod[] {
+  const periods: PricePeriod[] = []
+  
+  for (let i = 0; i < 48; i++) {
+    const hourIndex = Math.floor(i / 2)
+    const price = hourlyPrices[hourIndex] ?? hourlyPrices[Math.min(hourIndex, hourlyPrices.length - 1)] ?? 80
+    
+    const hour = Math.floor(i / 2)
+    const minute = (i % 2) * 30
+    const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+    
+    const startDate = new Date(`${tradingDay}T${startTime}:00+01:00`)
+    const utcDate = new Date(startDate.getTime() - 60 * 60 * 1000)
+    
+    periods.push({
+      period: i + 1,
+      start_time_utc: utcDate.toISOString(),
+      start_time_dublin: startDate.toISOString(),
+      price_eur_mwh: Math.round(price * 100) / 100,
+      quintile: 3 as 1 | 2 | 3 | 4 | 5,
+      source,
+    })
+  }
+  
+  calculateQuintiles(periods)
+  return periods
+}
+
+// Generate realistic fallback prices
 function generateRealisticPrices(tradingDay: string): PricePeriod[] {
   const date = new Date(tradingDay)
   const dayOfWeek = date.getDay()
@@ -180,12 +305,14 @@ function generateRealisticPrices(tradingDay: string): PricePeriod[] {
   const seasonalFactor = month >= 10 || month <= 2 ? 1.3 : month >= 5 && month <= 8 ? 0.8 : 1.0
   const weekdayFactor = isWeekend ? 0.75 : 1.0
   
+  // Use date as seed for consistent prices for same day
   const seed = date.getTime()
   const seededRandom = (index: number) => {
     const x = Math.sin(seed + index * 1000) * 10000
     return x - Math.floor(x)
   }
 
+  // Typical Irish DAM price profile
   const baseProfile = [
     52, 48, 45, 42, 40, 38, 36, 35, 34, 33, 33, 34,
     38, 45, 58, 72, 85, 95, 105, 115,
@@ -194,32 +321,15 @@ function generateRealisticPrices(tradingDay: string): PricePeriod[] {
     125, 105, 88, 72, 62, 55
   ]
 
-  const periods: PricePeriod[] = []
-
-  for (let i = 0; i < 48; i++) {
-    const hour = Math.floor(i / 2)
-    const minute = (i % 2) * 30
-    const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-
-    const basePrice = baseProfile[i] || 80
+  const hourlyPrices: number[] = []
+  for (let i = 0; i < 24; i++) {
+    const idx = i * 2
+    const basePrice = (baseProfile[idx] + baseProfile[idx + 1]) / 2
     const randomVariation = (seededRandom(i) - 0.5) * 25
-    const price = Math.max(15, Math.min(300, basePrice * seasonalFactor * weekdayFactor + randomVariation))
-
-    const startDate = new Date(`${tradingDay}T${startTime}:00+01:00`)
-    const utcDate = new Date(startDate.getTime() - 60 * 60 * 1000)
-
-    periods.push({
-      period: i + 1,
-      start_time_utc: utcDate.toISOString(),
-      start_time_dublin: startDate.toISOString(),
-      price_eur_mwh: Math.round(price * 100) / 100,
-      quintile: 3 as 1 | 2 | 3 | 4 | 5,
-      source: "Interpolated" as const,
-    })
+    hourlyPrices.push(Math.max(15, Math.min(300, basePrice * seasonalFactor * weekdayFactor + randomVariation)))
   }
 
-  calculateQuintiles(periods)
-  return periods
+  return convertToPeriods(tradingDay, hourlyPrices, "Interpolated")
 }
 
 // Build DayPrices object
@@ -265,11 +375,24 @@ export async function GET() {
     const tomorrowStr = getDublinDate(1)
     const yesterdayStr = getDublinDate(-1)
 
-    // Try to fetch real SEMO data, fall back to realistic generated prices
+    // Fetch prices: try ENTSO-E first, then SEMO, then fallback
+    const fetchPricesForDay = async (day: string): Promise<PricePeriod[]> => {
+      // Try ENTSO-E first (needs API token)
+      const entsoePrices = await fetchEntsoePrices(day)
+      if (entsoePrices) return entsoePrices
+      
+      // Try SEMO
+      const semoPrices = await fetchSemoPrices(day)
+      if (semoPrices) return semoPrices
+      
+      // Fallback to generated prices
+      return generateRealisticPrices(day)
+    }
+
     const [todayPeriods, tomorrowPeriods, yesterdayPeriods] = await Promise.all([
-      fetchSemoPrices(todayStr).then(p => p || generateRealisticPrices(todayStr)),
-      fetchSemoPrices(tomorrowStr).then(p => p || generateRealisticPrices(tomorrowStr)),
-      fetchSemoPrices(yesterdayStr).then(p => p || generateRealisticPrices(yesterdayStr)),
+      fetchPricesForDay(todayStr),
+      fetchPricesForDay(tomorrowStr),
+      fetchPricesForDay(yesterdayStr),
     ])
     
     // Build response
@@ -323,17 +446,23 @@ export async function GET() {
     }
     
     // Determine data source
-    const semoCount = todayPrices.periods.filter(p => p.source === "SEMOPX").length
-    const dataSource = semoCount > 0 ? "SEMOPX" : "Simulated"
+    const sources = [...new Set([
+      ...todayPrices.periods.map(p => p.source),
+      ...tomorrowPrices.periods.map(p => p.source),
+      ...yesterdayPrices.periods.map(p => p.source),
+    ])]
+    
+    const primarySource = sources.includes("ENTSOE") ? "ENTSOE" : sources.includes("SEMOPX") ? "SEMOPX" : "Simulated"
     
     // Backend status
     const backendStatus = {
       last_scrape: new Date().toISOString(),
       backend: "ok" as const,
       missing_days: 0,
-      data_source: dataSource,
-      semopx_periods: semoCount,
-      interpolated_periods: todayPrices.periods.filter(p => p.source === "Interpolated").length,
+      data_source: primarySource,
+      today_source: todayPrices.periods[0]?.source || "Unknown",
+      tomorrow_source: tomorrowPrices.periods[0]?.source || "Unknown",
+      yesterday_source: yesterdayPrices.periods[0]?.source || "Unknown",
     }
     
     return NextResponse.json({
