@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Area,
   Line,
@@ -53,6 +53,11 @@ export function ScreenPriceCurve({
   currentPeriodIndex,
 }: ScreenPriceCurveProps) {
   const [dayView, setDayView] = useState<DayView>("today")
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const getSelectedData = () => {
     switch (dayView) {
@@ -170,7 +175,7 @@ export function ScreenPriceCurve({
       <Card className="overflow-hidden">
         <CardContent className="p-2 sm:p-4 lg:p-6">
           <div className="w-full h-[250px] sm:h-[300px] lg:h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {mounted && <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <defs>
                   <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
@@ -256,7 +261,7 @@ export function ScreenPriceCurve({
                   name="Dynamic Price"
                 />
               </ComposedChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </CardContent>
       </Card>
