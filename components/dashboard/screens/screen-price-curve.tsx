@@ -19,9 +19,11 @@ import { getQuintileColor, getSignalText } from "@/lib/types"
 
 interface ScreenPriceCurveProps {
   todayPrices: DayPrices
-  todayTariffs?: DayTariffs
+  todayTariffs?: DayTariffs | null
   tomorrowPrices: DayPrices | null
+  tomorrowTariffs?: DayTariffs | null
   yesterdayPrices: DayPrices
+  yesterdayTariffs?: DayTariffs | null
   currentPeriodIndex: number
 }
 
@@ -45,21 +47,34 @@ export function ScreenPriceCurve({
   todayPrices,
   todayTariffs,
   tomorrowPrices,
+  tomorrowTariffs,
   yesterdayPrices,
+  yesterdayTariffs,
   currentPeriodIndex,
 }: ScreenPriceCurveProps) {
   const [dayView, setDayView] = useState<DayView>("today")
 
-  const getSelectedPrices = () => {
+  const getSelectedData = () => {
     switch (dayView) {
-      case "tomorrow": return tomorrowPrices || todayPrices
-      case "yesterday": return yesterdayPrices
-      default: return todayPrices
+      case "tomorrow": 
+        return { 
+          prices: tomorrowPrices || todayPrices, 
+          tariffs: tomorrowTariffs || todayTariffs 
+        }
+      case "yesterday": 
+        return { 
+          prices: yesterdayPrices, 
+          tariffs: yesterdayTariffs || todayTariffs 
+        }
+      default: 
+        return { 
+          prices: todayPrices, 
+          tariffs: todayTariffs 
+        }
     }
   }
 
-  const selectedPrices = getSelectedPrices()
-  const selectedTariffs = dayView === "today" ? todayTariffs : undefined
+  const { prices: selectedPrices, tariffs: selectedTariffs } = getSelectedData()
 
   const chartData = selectedPrices.periods.map((period, idx) => {
     const tariff = selectedTariffs?.periods[idx]
@@ -152,9 +167,9 @@ export function ScreenPriceCurve({
       </div>
 
       {/* Main Chart */}
-      <Card className="flex-1 min-h-0">
+      <Card className="flex-1 min-h-0 overflow-hidden">
         <CardContent className="h-full p-2 sm:p-4 lg:p-6">
-          <div className="h-full w-full" style={{ minHeight: "220px" }}>
+          <div className="w-full" style={{ height: "300px", minHeight: "220px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <defs>

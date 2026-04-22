@@ -215,7 +215,9 @@ export function Dashboard() {
               todayPrices={todayPrices}
               todayTariffs={todayTariffs}
               tomorrowPrices={tomorrowPrices}
+              tomorrowTariffs={data?.tomorrowTariffs ?? null}
               yesterdayPrices={yesterdayPrices}
+              yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
             />
           )}
