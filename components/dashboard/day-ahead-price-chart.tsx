@@ -86,7 +86,6 @@ export function DayAheadPriceChart({
 }: DayAheadPriceChartProps) {
   const [dayView, setDayView] = useState<DayView>(dayViewOverride || "today")
   const [mounted, setMounted] = useState(false)
-  const [dayView, setDayView] = useState<DayView>("today")
 
   // Fetch data from API (only if no external data provided)
   const { data: apiData, error, isLoading, mutate } = useSWR<{
