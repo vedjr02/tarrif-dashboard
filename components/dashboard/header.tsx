@@ -107,18 +107,15 @@ export function Header({
             <span className="truncate text-sm font-bold text-foreground tracking-tight sm:text-xl md:text-2xl">
               ADFLEX Dynamic Price Dashboard
             </span>
-            <span className="hidden text-xs text-muted-foreground sm:block sm:text-sm">
-              Powered by Semo PX Data
-            </span>
           </div>
         </div>
 
-        {/* Center: Dublin Clock — hidden on mobile, visible on desktop */}
-        <div className="hidden flex-col items-center gap-1 sm:flex absolute left-1/2 -translate-x-1/2">
-          <span className="font-mono text-xl font-bold text-foreground tracking-wider sm:text-2xl lg:text-3xl">
+        {/* Center: Dublin Clock — very small, displayed inline with controls */}
+        <div className="hidden flex-col items-end gap-0 sm:flex text-xs">
+          <span className="font-mono font-bold text-foreground tracking-wider">
             {dublinTime}
           </span>
-          <span className="text-xs text-muted-foreground lg:text-sm">
+          <span className="text-xs text-muted-foreground">
             {dublinDate}
           </span>
         </div>
