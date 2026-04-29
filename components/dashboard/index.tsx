@@ -8,6 +8,7 @@ import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
 import { ScreenPriceCurve } from "./screens/screen-price-curve"
 import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
+import { DayAheadPriceChart } from "./day-ahead-price-chart"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
 
 interface PricesApiResponse {
@@ -31,6 +32,7 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
+  { id: "day-ahead", label: "Day-Ahead Market" },
   { id: "price-curve", label: "Price Curve Comparison" },
   { id: "operations", label: "Operations & Savings" },
 ]
@@ -211,6 +213,11 @@ export function Dashboard() {
             />
           )}
           {currentScreen === 1 && (
+            <div className="h-full p-3 sm:p-5 lg:p-8 overflow-auto">
+              <DayAheadPriceChart height={350} />
+            </div>
+          )}
+          {currentScreen === 2 && (
             <ScreenPriceCurve
               todayPrices={todayPrices}
               todayTariffs={todayTariffs}
@@ -221,7 +228,7 @@ export function Dashboard() {
               currentPeriodIndex={currentPeriodIndex}
             />
           )}
-          {currentScreen === 2 && (
+          {currentScreen === 3 && (
             <ScreenOperationsSavings
               currentPrice={currentPrice}
               currentTariff={currentTariff}
