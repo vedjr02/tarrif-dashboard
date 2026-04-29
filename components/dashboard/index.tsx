@@ -251,35 +251,40 @@ export function Dashboard() {
           <ChevronRight className="h-5 w-5 sm:h-8 sm:w-8" />
           <span className="sr-only">Next screen</span>
         </Button>
-
-        {/* Screen Indicators */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:bottom-6 sm:gap-3">
-          {SCREENS.map((screen, index) => (
-            <button
-              key={screen.id}
-              onClick={() => goToScreen(index)}
-              className={`flex items-center gap-1.5 rounded-full transition-all sm:gap-2 ${
-                currentScreen === index
-                  ? "bg-primary text-primary-foreground scale-105 px-3 py-1.5 text-xs font-semibold sm:px-5 sm:py-2.5 sm:text-sm"
-                  : "bg-muted/80 text-muted-foreground hover:bg-muted px-2 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm"
-              }`}
-            >
-              <span className={`h-2 w-2 shrink-0 rounded-full ${currentScreen === index ? "bg-primary-foreground" : "bg-muted-foreground"}`} />
-              <span className="hidden sm:inline">{screen.label}</span>
-              <span className="sm:hidden">{index + 1}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Auto-rotation indicator */}
-        {isAutoRotating && (
-          <div className="absolute bottom-4 right-3 flex items-center gap-1.5 rounded-full bg-muted/80 px-2.5 py-1 text-xs text-muted-foreground sm:bottom-6 sm:right-6 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse sm:h-2 sm:w-2" />
-            <span className="hidden sm:inline">Auto-rotating every {rotationInterval / 1000}s</span>
-            <span className="sm:hidden">{rotationInterval / 1000}s</span>
-          </div>
-        )}
       </main>
+
+      {/* Navigation Bar - Below main content, above footer */}
+      <nav className="border-t border-border bg-background/95 backdrop-blur-sm px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Screen Indicators */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-1">
+            {SCREENS.map((screen, index) => (
+              <button
+                key={screen.id}
+                onClick={() => goToScreen(index)}
+                className={`flex items-center gap-1.5 rounded-full transition-all sm:gap-2 ${
+                  currentScreen === index
+                    ? "bg-primary text-primary-foreground scale-105 px-3 py-1.5 text-xs font-semibold sm:px-5 sm:py-2.5 sm:text-sm"
+                    : "bg-muted/80 text-muted-foreground hover:bg-muted px-2 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm"
+                }`}
+              >
+                <span className={`h-2 w-2 shrink-0 rounded-full ${currentScreen === index ? "bg-primary-foreground" : "bg-muted-foreground"}`} />
+                <span className="hidden sm:inline">{screen.label}</span>
+                <span className="sm:hidden">{index + 1}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Auto-rotation indicator */}
+          {isAutoRotating && (
+            <div className="flex items-center gap-1.5 rounded-full bg-muted/80 px-2.5 py-1 text-xs text-muted-foreground sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse sm:h-2 sm:w-2" />
+              <span className="hidden sm:inline">Auto {rotationInterval / 1000}s</span>
+              <span className="sm:hidden">{rotationInterval / 1000}s</span>
+            </div>
+          )}
+        </div>
+      </nav>
 
       <Footer status={backendStatus} />
 
