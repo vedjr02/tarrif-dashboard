@@ -6,7 +6,7 @@ import { Header } from "./header"
 import { Footer } from "./footer"
 import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
-import { ScreenPriceCurve } from "./screens/screen-price-curve"
+import { ScreenPriceAnalysis } from "./screens/screen-price-analysis"
 import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
 
@@ -31,7 +31,7 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
-  { id: "price-curve", label: "Price Curve Comparison" },
+  { id: "price-analysis", label: "Price Analysis" },
   { id: "operations", label: "Operations & Savings" },
 ]
 
@@ -211,7 +211,7 @@ export function Dashboard() {
             />
           )}
           {currentScreen === 1 && (
-            <ScreenPriceCurve
+            <ScreenPriceAnalysis
               todayPrices={todayPrices}
               todayTariffs={todayTariffs}
               tomorrowPrices={tomorrowPrices}
