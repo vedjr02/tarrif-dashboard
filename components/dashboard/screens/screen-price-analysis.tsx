@@ -183,6 +183,7 @@ export function ScreenPriceAnalysis({
                 <DayAheadPriceChart
                   compact={true}
                   height={250}
+                  dayViewOverride={dayView}
                 />
               )}
             </div>

@@ -28,6 +28,8 @@ interface DayAheadPriceChartProps {
   compact?: boolean
   /** Custom height for the chart */
   height?: number
+  /** Override the day view from parent component */
+  dayViewOverride?: DayView
 }
 
 type DayView = "yesterday" | "today" | "tomorrow"
@@ -80,7 +82,9 @@ export function DayAheadPriceChart({
   externalData,
   compact = false,
   height = 300,
+  dayViewOverride,
 }: DayAheadPriceChartProps) {
+  const [dayView, setDayView] = useState<DayView>(dayViewOverride || "today")
   const [mounted, setMounted] = useState(false)
   const [dayView, setDayView] = useState<DayView>("today")
 
@@ -102,6 +106,13 @@ export function DayAheadPriceChart({
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Sync dayView with parent's dayViewOverride
+  useEffect(() => {
+    if (dayViewOverride) {
+      setDayView(dayViewOverride)
+    }
+  }, [dayViewOverride])
 
   // Get prices for selected day view
   const getSelectedPrices = (): DayAheadPriceResult | null => {
