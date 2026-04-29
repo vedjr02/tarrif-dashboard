@@ -255,9 +255,9 @@ export function Dashboard() {
 
       {/* Navigation Bar - Below main content, above footer */}
       <nav className="border-t border-border bg-background/95 backdrop-blur-sm px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex items-center justify-between gap-4">
-          {/* Screen Indicators */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-1">
+        <div className="flex items-center justify-center gap-4">
+          {/* Screen Indicators - Centered */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {SCREENS.map((screen, index) => (
               <button
                 key={screen.id}
@@ -275,9 +275,9 @@ export function Dashboard() {
             ))}
           </div>
 
-          {/* Auto-rotation indicator */}
+          {/* Auto-rotation indicator - Right aligned */}
           {isAutoRotating && (
-            <div className="flex items-center gap-1.5 rounded-full bg-muted/80 px-2.5 py-1 text-xs text-muted-foreground sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
+            <div className="absolute right-4 sm:right-6 flex items-center gap-1.5 rounded-full bg-muted/80 px-2.5 py-1 text-xs text-muted-foreground sm:gap-2 sm:px-4 sm:py-2 sm:text-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse sm:h-2 sm:w-2" />
               <span className="hidden sm:inline">Auto {rotationInterval / 1000}s</span>
               <span className="sm:hidden">{rotationInterval / 1000}s</span>
