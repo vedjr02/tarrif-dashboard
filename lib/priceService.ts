@@ -285,12 +285,16 @@ function parseSemoCsv(csvContent: string): number[] | null {
  * 
  * SEMO API: https://reports.sem-o.com/api/v1/documents/static-reports
  * Filter by ResourceName=MarketResult_SEM-DA for Day-Ahead Market results
- * DateRetention field indicates the delivery date
+ * 
+ * IMPORTANT: SEMO publishes D+1 (tomorrow) prices only
+ * - If you request 2025-04-23, SEMO has the report published on 2025-04-22
+ * - The DateRetention field in API response shows what date the prices are for
  */
 async function fetchSemoPrices(tradingDay: string): Promise<HourlyPrice[] | null> {
   try {
     // Search for recent Day-Ahead Market reports
-    const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=${SEMO_RESOURCE_NAME}&page_size=30&sort_by=PublishTime%20desc`
+    // We request more items to find the correct date
+    const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=${SEMO_RESOURCE_NAME}&page_size=50&sort_by=PublishTime%20desc`
     
     const searchResponse = await fetch(searchUrl, {
       headers: { "Accept": "application/json" },
@@ -308,30 +312,30 @@ async function fetchSemoPrices(tradingDay: string): Promise<HourlyPrice[] | null
       return null
     }
     
-    // Find report matching the requested trading day
-    // DateRetention format: YYYY-MM-DD
-    const targetDate = tradingDay.replace(/-/g, '')
+    // Find report for the requested trading day
+    // The report filename contains the trading day in format: _20250423_
+    const targetDateNoHyphens = tradingDay.replace(/-/g, '')
     
     let selectedReport = null
     for (const report of searchData.items) {
-      // Check DateRetention field for delivery date match
-      const retentionDate = report.DateRetention?.replace(/-/g, '') || ''
-      if (retentionDate.startsWith(targetDate)) {
-        selectedReport = report
-        break
-      }
-      
-      // Also check filename for date
+      // Check ResourceName filename which contains the trading day
+      // Format: MarketResult_SEM-DA_PWR-MRC-D+1_20250423_...
       const resourceName = report.ResourceName || ''
-      if (resourceName.includes(targetDate.substring(0, 8))) {
-        selectedReport = report
-        break
+      
+      // Extract date from filename (8 digits after PWR-MRC-D+1_)
+      const dateMatch = resourceName.match(/_(\d{8})_/)
+      if (dateMatch) {
+        const reportDate = dateMatch[1]
+        if (reportDate === targetDateNoHyphens) {
+          selectedReport = report
+          break
+        }
       }
     }
     
-    // If no exact match, use most recent (for tomorrow's data which may not be published yet)
+    // If no exact match found, this date may not have data yet (future dates) or may be old
     if (!selectedReport) {
-      selectedReport = searchData.items[0]
+      return null
     }
     
     // Download the CSV file

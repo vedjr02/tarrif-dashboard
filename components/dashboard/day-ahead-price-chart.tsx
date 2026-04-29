@@ -86,15 +86,15 @@ export function DayAheadPriceChart({
 
   // Fetch data from API (only if no external data provided)
   const { data: apiData, error, isLoading, mutate } = useSWR<{
-    todayPrices: { periods: { price_eur_mwh: number; start_time_dublin: string }[] }
-    tomorrowPrices: { periods: { price_eur_mwh: number; start_time_dublin: string }[] } | null
-    yesterdayPrices: { periods: { price_eur_mwh: number; start_time_dublin: string }[] }
-    backendStatus: { data_source: string }
+    yesterday: DayAheadPriceResult | null
+    today: DayAheadPriceResult | null
+    tomorrow: DayAheadPriceResult | null
+    fetchedAt: string
   }>(
-    externalData ? null : "/api/prices",
+    externalData ? null : "/api/day-ahead-prices",
     fetcher,
     {
-      refreshInterval: 60000,
+      refreshInterval: 300000, // 5 minutes
       revalidateOnFocus: true,
     }
   )
@@ -103,37 +103,22 @@ export function DayAheadPriceChart({
     setMounted(true)
   }, [])
 
-  // Transform API data to HourlyPrice format
-  const transformApiData = (): HourlyPrice[] | null => {
+  // Get prices for selected day view
+  const getSelectedPrices = (): DayAheadPriceResult | null => {
     if (!apiData) return null
-
-    const selectedPrices = dayView === "tomorrow" 
-      ? apiData.tomorrowPrices?.periods 
-      : dayView === "yesterday" 
-        ? apiData.yesterdayPrices?.periods 
-        : apiData.todayPrices?.periods
-
-    if (!selectedPrices) return null
-
-    // Convert half-hourly to hourly (take first of each pair)
-    const hourlyPrices: HourlyPrice[] = []
-    for (let hour = 0; hour < 24; hour++) {
-      const periodIndex = hour * 2
-      const period = selectedPrices[periodIndex]
-      if (period) {
-        hourlyPrices.push({
-          hour,
-          timestamp: period.start_time_dublin,
-          priceEurMwh: period.price_eur_mwh,
-          source: (apiData.backendStatus?.data_source as "SEMO" | "ENTSOE") || "SEMO",
-        })
-      }
+    
+    switch (dayView) {
+      case "yesterday":
+        return apiData.yesterday
+      case "tomorrow":
+        return apiData.tomorrow
+      default:
+        return apiData.today
     }
-    return hourlyPrices
   }
 
-  // Get chart data
-  const chartPrices: HourlyPrice[] | null = externalData?.prices || transformApiData()
+  const selectedData = externalData || getSelectedPrices()
+  const chartPrices = selectedData?.prices || []
 
   // Calculate current hour for reference line
   const currentHour = new Date().getHours()
@@ -158,7 +143,7 @@ export function DayAheadPriceChart({
   }
 
   // Handle error state (Task 3)
-  if (error || (!chartPrices || chartPrices.length === 0)) {
+  if (error || !chartPrices || chartPrices.length === 0) {
     return (
       <Card className={compact ? "" : "w-full"}>
         {!compact && (
@@ -205,8 +190,8 @@ export function DayAheadPriceChart({
             <div>
               <CardTitle className="text-base sm:text-lg">Day-Ahead Price (EUR/MWh)</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Source: {externalData?.source || apiData?.backendStatus?.data_source || "SEMO"}
-                {externalData?.isRealData === false && " (Simulated)"}
+                Source: {selectedData?.source || "SEMO"}
+                {selectedData?.isRealData === false && " (Simulated)"}
               </p>
             </div>
             <div className="flex gap-1">
@@ -216,7 +201,7 @@ export function DayAheadPriceChart({
                   variant={dayView === view ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDayView(view)}
-                  disabled={view === "tomorrow" && !apiData?.tomorrowPrices}
+                  disabled={view === "tomorrow" && !apiData?.tomorrow}
                   className="text-xs capitalize px-2 py-1 h-7"
                 >
                   {view}
