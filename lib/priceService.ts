@@ -335,20 +335,4 @@ export async function fetchDayAheadPrices(tradingDay?: string): Promise<DayAhead
   }
 }
 
-/**
- * Fetch retail tariffs from live APIs
- * No fallback to hardcoded values - shows warning banner if unavailable
- */
-export async function getRetailTariffs(): Promise<{ tariffs: RetailTariff[]; dataAvailable: boolean; warning?: string }> {
-  const tariffs = await fetchRetailTariffs()
 
-  if (tariffs.length === 0) {
-    return {
-      tariffs: [],
-      dataAvailable: false,
-      warning: "Retail tariff data unavailable — live API returned no results",
-    }
-  }
-
-  return { tariffs, dataAvailable: true }
-}
