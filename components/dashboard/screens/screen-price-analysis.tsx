@@ -239,8 +239,8 @@ export function ScreenPriceAnalysis({
           </div>
         </CardHeader>
 
-        <CardContent className="flex-1 p-2 sm:p-4 overflow-hidden flex flex-col">
-          <div className="w-full flex-1 relative">
+        <CardContent className="p-2 sm:p-4">
+          <div className="w-full h-[300px] sm:h-[350px] lg:h-[400px] relative">
             {mounted && chartData.length > 0 && (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -330,7 +330,7 @@ export function ScreenPriceAnalysis({
               </ResponsiveContainer>
             )}
             {(!mounted || chartData.length === 0) && (
-              <div className="flex items-center justify-center w-full h-full">
+              <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             )}
