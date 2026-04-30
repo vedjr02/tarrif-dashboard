@@ -45,8 +45,6 @@ export function ScreenPriceAnalysis({
   const [tariffError, setTariffError] = useState<string | null>(null)
   const [tariffLoading, setTariffLoading] = useState(true)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
-  const [showTariffDropdown, setShowTariffDropdown] = useState(false)
-  const [showTariffDropdown, setShowTariffDropdown] = useState(false)
 
   useEffect(() => {
     setMounted(true)
