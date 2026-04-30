@@ -335,4 +335,19 @@ export async function fetchDayAheadPrices(tradingDay?: string): Promise<DayAhead
   }
 }
 
+/**
+ * Fetch prices for multiple days at once
+ * Useful for getting yesterday, today, and tomorrow in one call
+ */
+export async function fetchMultipleDayPrices(days: string[]): Promise<Map<string, DayAheadPriceResult>> {
+  const results = await Promise.all(days.map(day => fetchDayAheadPrices(day)))
+  
+  const map = new Map<string, DayAheadPriceResult>()
+  days.forEach((day, index) => {
+    map.set(day, results[index])
+  })
+  
+  return map
+}
+
 
