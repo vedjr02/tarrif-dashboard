@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -92,31 +92,42 @@ export function ScreenPriceAnalysis({
 
   const { prices: selectedPrices } = getSelectedData()
 
-  // Convert 30-min periods to hourly data for chart
-  const chartData = selectedPrices.periods.map((period, idx) => {
-    const semPriceCentsKwh = period.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
-    const date = new Date(period.start_time_dublin)
-
-    const dataPoint: Record<string, any> = {
-      periodIdx: idx,
-      time: date.toLocaleTimeString("en-IE", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "Europe/Dublin",
-      }),
-      semPrice: semPriceCentsKwh,
-      quintile: period.quintile,
-      source: period.source,
-    }
-
-    // Add retail tariff prices (already in c/kWh)
-    retailTariffs.forEach((tariff) => {
-      dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate
+  // Build stable color map for tariffs (indexed by supplier position)
+  const tariffColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    retailTariffs.forEach((tariff, idx) => {
+      map[tariff.supplier] = `hsl(${60 + idx * 80}, 70%, 55%)`
     })
+    return map
+  }, [retailTariffs])
 
-    return dataPoint
-  })
+  // Convert 30-min periods to chart data with tariff prices (re-runs when tariffs change)
+  const chartData = useMemo(() => {
+    return selectedPrices.periods.map((period, idx) => {
+      const semPriceCentsKwh = period.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
+      const date = new Date(period.start_time_dublin)
+
+      const dataPoint: Record<string, any> = {
+        periodIdx: idx,
+        time: date.toLocaleTimeString("en-IE", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: "Europe/Dublin",
+        }),
+        semPrice: semPriceCentsKwh,
+        quintile: period.quintile,
+        source: period.source,
+      }
+
+      // Add retail tariff prices (already in c/kWh)
+      retailTariffs.forEach((tariff) => {
+        dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate
+      })
+
+      return dataPoint
+    })
+  }, [selectedPrices, retailTariffs])
 
   // Calculate min/max for Y-axis
   const allValues = chartData.flatMap((d) => {
@@ -178,7 +189,7 @@ export function ScreenPriceAnalysis({
           <span className="text-sm font-bold text-primary sm:text-base lg:text-lg">
             {avgSemPrice.toFixed(2)}c/kWh
           </span>
-          <span className="text-xs text-muted-foreground mt-1">24-hour average, no margin applied</span>
+          <span className="text-xs text-muted-foreground mt-1">48-period average • SEM wholesale spot price</span>
         </CardContent>
       </Card>
 
@@ -192,8 +203,8 @@ export function ScreenPriceAnalysis({
             {tariffLoading ? (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : (
-              retailTariffs.map((tariff, idx) => {
-                const color = `hsl(${60 + idx * 80}, 70%, 55%)`
+              retailTariffs.map((tariff) => {
+                const color = tariffColorMap[tariff.supplier]
                 const isSelected = selectedTariffs.has(tariff.supplier)
                 return (
                   <button
@@ -298,12 +309,12 @@ export function ScreenPriceAnalysis({
                   />
 
                   {/* Retail tariff lines - selected only */}
-                  {Array.from(selectedTariffs).map((supplier, idx) => (
+                  {Array.from(selectedTariffs).map((supplier) => (
                     <Line
                       key={supplier}
                       type="stepAfter"
                       dataKey={`tariff_${supplier}`}
-                      stroke={`hsl(${60 + idx * 80}, 70%, 50%)`}
+                      stroke={tariffColorMap[supplier]}
                       strokeWidth={1.5}
                       strokeDasharray="4 4"
                       dot={false}
@@ -317,20 +328,6 @@ export function ScreenPriceAnalysis({
         </CardContent>
       </Card>
 
-      {/* Footer Info */}
-      {retailTariffs.length > 0 && (
-        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
-          <span className="font-semibold">Available Tariffs:</span>
-          {retailTariffs.map((t) => (
-            <span key={t.supplier}>
-              {t.source === "SEMOPX" ? "🔴" : "🔵"} {t.supplier}: {t.unitRate.toFixed(2)}c/kWh
-            </span>
-          ))}
-          <span className="text-xs text-muted-foreground/70">
-            (🔴 = SEMOpx data, 🔵 = CRU data)
-          </span>
-        </div>
-      )}
     </div>
   )
 }
