@@ -57,6 +57,8 @@ export function ScreenPriceAnalysis({
       try {
         const { tariffs, dataAvailable, warning } = await getRetailTariffs()
         setRetailTariffs(tariffs)
+        // Auto-select all tariffs by default so they appear on the chart
+        setSelectedTariffs(new Set(tariffs.map(t => t.supplier)))
         if (!dataAvailable && warning) {
           setTariffError(warning)
         }
@@ -103,6 +105,9 @@ export function ScreenPriceAnalysis({
 
   // Convert 30-min periods to chart data with tariff prices (re-runs when tariffs change)
   const chartData = useMemo(() => {
+    if (!selectedPrices?.periods || selectedPrices.periods.length === 0) {
+      return []
+    }
     return selectedPrices.periods.map((period, idx) => {
       const semPriceCentsKwh = period.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
       const date = new Date(period.start_time_dublin)
@@ -234,9 +239,9 @@ export function ScreenPriceAnalysis({
           </div>
         </CardHeader>
 
-        <CardContent className="flex-1 p-2 sm:p-4 min-h-0">
-          <div className="w-full h-full">
-            {mounted && (
+        <CardContent className="flex-1 p-2 sm:p-4 min-h-[300px]">
+          <div className="w-full h-full min-h-[280px]">
+            {mounted && chartData.length > 0 && (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                   <defs>
@@ -323,6 +328,11 @@ export function ScreenPriceAnalysis({
                   ))}
                 </ComposedChart>
               </ResponsiveContainer>
+            )}
+            {(!mounted || chartData.length === 0) && (
+              <div className="flex items-center justify-center h-full min-h-[280px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
             )}
           </div>
         </CardContent>
