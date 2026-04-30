@@ -53,7 +53,7 @@ export function ScreenPriceAnalysis({
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
   const [renewMargin, setRenewMargin] = useState(2.0) // c/kWh margin
-  const [selectedTariffs, setSelectedTariffs] = useState<Set<TariffName>>(
+  const [selectedRetailTariffs, setSelectedRetailTariffs] = useState<Set<TariffName>>(
     new Set(Object.keys(RETAIL_TARIFFS) as TariffName[])
   )
   const [showTariffDropdown, setShowTariffDropdown] = useState(false)
@@ -82,7 +82,7 @@ export function ScreenPriceAnalysis({
     }
   }
 
-  const { prices: selectedPrices, tariffs: selectedTariffs } = getSelectedData()
+  const { prices: selectedPrices, tariffs: _selectedDayTariffs } = getSelectedData()
 
   const chartData = selectedPrices.periods.map((period, idx) => {
     // Convert SEM price from EUR/MWh to c/kWh: divide by 10
@@ -228,7 +228,7 @@ export function ScreenPriceAnalysis({
                 onClick={() => setShowTariffDropdown(!showTariffDropdown)}
               >
                 <ChevronDown className="h-3 w-3 mr-1" />
-                Tariffs ({selectedTariffs.size})
+                Tariffs ({selectedRetailTariffs.size})
               </Button>
               {showTariffDropdown && (
                 <div className="absolute right-0 mt-1 bg-background border border-border rounded shadow-lg z-10 min-w-max">
@@ -239,9 +239,9 @@ export function ScreenPriceAnalysis({
                     >
                       <input
                         type="checkbox"
-                        checked={selectedTariffs.has(tariff as TariffName)}
+                        checked={selectedRetailTariffs.has(tariff as TariffName)}
                         onChange={(e) => {
-                          const newSet = new Set(selectedTariffs)
+                          const newSet = new Set(selectedRetailTariffs)
                           if (e.target.checked) {
                             newSet.add(tariff as TariffName)
                           } else {
@@ -297,7 +297,7 @@ export function ScreenPriceAnalysis({
                                   {data.renewPrice.toFixed(2)}c/kWh
                                 </span>
                               </div>
-                              {Array.from(selectedTariffs).map((tariff) => (
+                              {Array.from(selectedRetailTariffs).map((tariff) => (
                                 <div key={tariff} className="flex items-center justify-between gap-6">
                                   <span className="text-xs text-muted-foreground">{tariff}:</span>
                                   <span className="text-xs font-bold text-muted-foreground">
@@ -328,7 +328,7 @@ export function ScreenPriceAnalysis({
                       name="Renew"
                     />
                     {/* Retail tariff lines */}
-                    {Array.from(selectedTariffs).map((tariff, idx) => (
+                    {Array.from(selectedRetailTariffs).map((tariff, idx) => (
                       <Line
                         key={tariff}
                         type="stepAfter"
