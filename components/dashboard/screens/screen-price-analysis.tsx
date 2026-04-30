@@ -45,7 +45,6 @@ export function ScreenPriceAnalysis({
   const [tariffError, setTariffError] = useState<string | null>(null)
   const [tariffLoading, setTariffLoading] = useState(true)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
-  const [renewMargin, setRenewMargin] = useState(2.0) // c/kWh margin for Renew tariff
 
   useEffect(() => {
     setMounted(true)
@@ -110,10 +109,8 @@ export function ScreenPriceAnalysis({
       return []
     }
     return selectedPrices.periods.map((period, idx) => {
-      // SEM price: EUR/MWh -> EUR/kWh (divide by 1000)
-      const semPriceEurKwh = period.price_eur_mwh / 1000
-      // Renew price: SEM + margin (margin is in c/kWh, convert to EUR/kWh)
-      const renewPriceEurKwh = semPriceEurKwh + (renewMargin / 100)
+      // Renew price = SEM price: EUR/MWh -> EUR/kWh (divide by 1000)
+      const renewPriceEurKwh = period.price_eur_mwh / 1000
       
       const date = new Date(period.start_time_dublin)
 
@@ -137,7 +134,7 @@ export function ScreenPriceAnalysis({
 
       return dataPoint
     })
-  }, [selectedPrices, retailTariffs, renewMargin])
+  }, [selectedPrices, retailTariffs])
 
   // Calculate min/max for Y-axis (all values now in EUR/kWh)
   const allValues = chartData.flatMap((d) => {
@@ -199,7 +196,7 @@ export function ScreenPriceAnalysis({
           <span className="text-sm font-bold text-amber-600 sm:text-base lg:text-lg">
             {avgRenewPrice.toFixed(4)} EUR/kWh
           </span>
-          <span className="text-xs text-muted-foreground mt-1">48-period average (SEM + {renewMargin.toFixed(1)}c margin)</span>
+          <span className="text-xs text-muted-foreground mt-1">48-period average SEM wholesale spot price</span>
         </CardContent>
       </Card>
 
@@ -207,21 +204,6 @@ export function ScreenPriceAnalysis({
       <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
         <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-base sm:text-lg">Renew vs Retail Tariffs</CardTitle>
-
-          {/* Renew margin input */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Renew margin:</label>
-            <input
-              type="number"
-              value={renewMargin}
-              onChange={(e) => setRenewMargin(parseFloat(e.target.value) || 2.0)}
-              step="0.1"
-              min="0"
-              max="10"
-              className="w-14 px-1.5 py-0.5 text-xs border border-border rounded bg-background"
-            />
-            <span className="text-xs text-muted-foreground">c/kWh</span>
-          </div>
 
           {/* Tariff selector inline checkboxes */}
           <div className="flex flex-wrap gap-2">
