@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { Info } from "lucide-react"
+import { Info, ChevronDown } from "lucide-react"
 import { getQuintileColor, getSignalText } from "@/lib/types"
 import type { Quintile } from "@/lib/types"
 
@@ -31,19 +31,15 @@ interface ScreenPriceAnalysisProps {
 
 type DayView = "today" | "tomorrow" | "yesterday"
 
-const IRISH_TARIFFS = {
-  day_rate: 0.4285,
-  night_rate: 0.2304,
-  peak_rate: 0.4899,
-  flat_rate: 0.2638,
+// Retail tariff options (c/kWh, VAT inclusive)
+const RETAIL_TARIFFS = {
+  "Energia Standard": { rate: 24.88, standing: 6.15 },
+  "Bord Gáis Standard": { rate: 25.12, standing: 4.00 },
+  "Electric Ireland Standard": { rate: 26.40, standing: 5.00 },
+  "SSE Airtricity Standard": { rate: 25.60, standing: 2.00 },
 }
 
-const getIrishTariffForPeriod = (periodIndex: number): number => {
-  const hour = Math.floor(periodIndex / 2)
-  if (hour >= 17 && hour < 19) return IRISH_TARIFFS.peak_rate
-  if (hour >= 23 || hour < 8) return IRISH_TARIFFS.night_rate
-  return IRISH_TARIFFS.day_rate
-}
+type TariffName = keyof typeof RETAIL_TARIFFS
 
 export function ScreenPriceAnalysis({
   todayPrices,
@@ -56,6 +52,11 @@ export function ScreenPriceAnalysis({
 }: ScreenPriceAnalysisProps) {
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
+  const [renewMargin, setRenewMargin] = useState(2.0) // c/kWh margin
+  const [selectedTariffs, setSelectedTariffs] = useState<Set<TariffName>>(
+    new Set(Object.keys(RETAIL_TARIFFS) as TariffName[])
+  )
+  const [showTariffDropdown, setShowTariffDropdown] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -84,9 +85,19 @@ export function ScreenPriceAnalysis({
   const { prices: selectedPrices, tariffs: selectedTariffs } = getSelectedData()
 
   const chartData = selectedPrices.periods.map((period, idx) => {
-    const tariff = selectedTariffs?.periods[idx]
+    // Convert SEM price from EUR/MWh to c/kWh: divide by 10
+    const semPriceCentsKwh = (period.price_eur_mwh / 10)
+    
+    // Calculate Renew price: SEM price + margin
+    const renewPrice = semPriceCentsKwh + renewMargin
+    
+    // Calculate retail tariff prices (already in c/kWh)
+    const retailPrices: Record<TariffName, number> = {} as Record<TariffName, number>
+    Object.entries(RETAIL_TARIFFS).forEach(([name, tariff]) => {
+      retailPrices[name as TariffName] = tariff.rate
+    })
+    
     const date = new Date(period.start_time_dublin)
-    const irishTariff = getIrishTariffForPeriod(idx)
     return {
       time: date.toLocaleTimeString("en-IE", {
         hour: "2-digit",
@@ -94,25 +105,27 @@ export function ScreenPriceAnalysis({
         hour12: false,
         timeZone: "Europe/Dublin",
       }),
-      dynamicPrice: tariff ? tariff.tariff_inc_vat_eur_kwh * 1000 : period.price_eur_mwh,
-      irishTariff: irishTariff * 1000,
+      semPrice: semPriceCentsKwh,
+      renewPrice: renewPrice,
+      ...retailPrices,
       quintile: period.quintile,
       source: period.source,
-      tariff_inc_vat: tariff?.tariff_inc_vat_eur_kwh,
-      irishTariffKwh: irishTariff,
     }
   })
 
-  const allValues = chartData.flatMap((d) => [d.dynamicPrice, d.irishTariff])
+  const allValues = chartData.flatMap((d) => [
+    d.semPrice,
+    d.renewPrice,
+    ...Object.keys(RETAIL_TARIFFS).map((name) => d[name as TariffName]),
+  ])
   const minPrice = Math.min(...allValues)
   const maxPrice = Math.max(...allValues)
   const padding = (maxPrice - minPrice) * 0.1
 
   const currentTimeStr = dayView === "today" ? chartData[currentPeriodIndex]?.time : null
 
-  const totalDynamicCost = chartData.reduce((sum, d) => sum + d.dynamicPrice, 0) / 48
-  const totalIrishCost = chartData.reduce((sum, d) => sum + d.irishTariff, 0) / 48
-  const avgSavingPercent = ((totalIrishCost - totalDynamicCost) / totalIrishCost) * 100
+  // Calculate average Renew price
+  const avgRenewPrice = chartData.reduce((sum, d) => sum + d.renewPrice, 0) / chartData.length
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8 overflow-auto h-full">
@@ -146,25 +159,25 @@ export function ScreenPriceAnalysis({
       <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
         <Card className="bg-primary/10 border-primary">
           <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
-            <span className="text-xs font-medium text-foreground sm:text-sm">ADFLEX Dynamic</span>
+            <span className="text-xs font-medium text-foreground sm:text-sm">SEM Price</span>
             <span className="text-sm font-bold text-primary sm:text-base lg:text-lg">
-              €{(totalDynamicCost / 1000).toFixed(4)}/kWh
+              {chartData[0]?.semPrice.toFixed(2)}c/kWh
+            </span>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-100/30 border-amber-400">
+          <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
+            <span className="text-xs font-medium text-foreground sm:text-sm">Renew</span>
+            <span className="text-sm font-bold text-amber-600 sm:text-base lg:text-lg">
+              {avgRenewPrice.toFixed(2)}c/kWh
             </span>
           </CardContent>
         </Card>
         <Card className="bg-accent/10 border-accent">
           <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
-            <span className="text-xs font-medium text-foreground sm:text-sm">Irish Tariff</span>
+            <span className="text-xs font-medium text-foreground sm:text-sm">Margin</span>
             <span className="text-sm font-bold text-accent sm:text-base lg:text-lg">
-              €{(totalIrishCost / 1000).toFixed(4)}/kWh
-            </span>
-          </CardContent>
-        </Card>
-        <Card className={avgSavingPercent > 0 ? "bg-primary/5 border-primary" : "bg-destructive/10 border-destructive"}>
-          <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
-            <span className="text-xs font-medium text-foreground sm:text-sm">Savings</span>
-            <span className={`text-sm font-bold sm:text-base lg:text-lg ${avgSavingPercent > 0 ? "text-primary" : "text-destructive"}`}>
-              {avgSavingPercent > 0 ? "+" : ""}{avgSavingPercent.toFixed(1)}%
+              {renewMargin.toFixed(1)}c/kWh
             </span>
           </CardContent>
         </Card>
@@ -190,10 +203,59 @@ export function ScreenPriceAnalysis({
           </CardContent>
         </Card>
 
-        {/* Right: Price Curve Comparison */}
+        {/* Right: Comparison Curve */}
         <Card className="overflow-hidden flex flex-col">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-base sm:text-lg">Comparison Curve</CardTitle>
+            <div className="flex items-center gap-2">
+              <label className="text-xs">Renew Margin:</label>
+              <input
+                type="number"
+                value={renewMargin}
+                onChange={(e) => setRenewMargin(parseFloat(e.target.value) || 2.0)}
+                step="0.1"
+                min="0"
+                max="5"
+                className="w-12 px-1 py-0.5 text-xs border rounded"
+              />
+              <span className="text-xs">c/kWh</span>
+            </div>
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setShowTariffDropdown(!showTariffDropdown)}
+              >
+                <ChevronDown className="h-3 w-3 mr-1" />
+                Tariffs ({selectedTariffs.size})
+              </Button>
+              {showTariffDropdown && (
+                <div className="absolute right-0 mt-1 bg-background border border-border rounded shadow-lg z-10 min-w-max">
+                  {Object.keys(RETAIL_TARIFFS).map((tariff) => (
+                    <label
+                      key={tariff}
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTariffs.has(tariff as TariffName)}
+                        onChange={(e) => {
+                          const newSet = new Set(selectedTariffs)
+                          if (e.target.checked) {
+                            newSet.add(tariff as TariffName)
+                          } else {
+                            newSet.delete(tariff as TariffName)
+                          }
+                          setSelectedTariffs(newSet)
+                        }}
+                      />
+                      {tariff}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="flex-1 p-2 sm:p-4 min-h-0">
             <div className="w-full h-full">
@@ -201,9 +263,9 @@ export function ScreenPriceAnalysis({
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                     <defs>
-                      <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                      <linearGradient id="renewGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis
@@ -218,8 +280,8 @@ export function ScreenPriceAnalysis({
                       tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
                       axisLine={{ stroke: "var(--border)" }}
                       tickLine={false}
-                      tickFormatter={(v) => `€${(v / 1000).toFixed(2)}`}
-                      width={48}
+                      tickFormatter={(v) => `${v.toFixed(1)}c`}
+                      width={45}
                     />
                     <Tooltip
                       content={({ active, payload }) => {
@@ -230,17 +292,19 @@ export function ScreenPriceAnalysis({
                             <p className="text-sm font-bold text-foreground">{data.time}</p>
                             <div className="mt-1 space-y-1">
                               <div className="flex items-center justify-between gap-6">
-                                <span className="text-xs text-primary">Dynamic:</span>
-                                <span className="text-xs font-bold text-primary">
-                                  €{(data.tariff_inc_vat ?? data.dynamicPrice / 1000).toFixed(4)}/kWh
+                                <span className="text-xs text-amber-600">Renew:</span>
+                                <span className="text-xs font-bold text-amber-600">
+                                  {data.renewPrice.toFixed(2)}c/kWh
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between gap-6">
-                                <span className="text-xs text-accent">Irish:</span>
-                                <span className="text-xs font-bold text-accent">
-                                  €{data.irishTariffKwh.toFixed(4)}/kWh
-                                </span>
-                              </div>
+                              {Array.from(selectedTariffs).map((tariff) => (
+                                <div key={tariff} className="flex items-center justify-between gap-6">
+                                  <span className="text-xs text-muted-foreground">{tariff}:</span>
+                                  <span className="text-xs font-bold text-muted-foreground">
+                                    {data[tariff].toFixed(2)}c/kWh
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )
@@ -254,22 +318,27 @@ export function ScreenPriceAnalysis({
                         strokeDasharray="6 3"
                       />
                     )}
+                    {/* Renew line - always shown */}
                     <Line
-                      type="stepAfter"
-                      dataKey="irishTariff"
-                      stroke="var(--accent)"
-                      strokeWidth={2}
-                      strokeDasharray="6 3"
-                      dot={false}
-                    />
-                    <Area
                       type="monotone"
-                      dataKey="dynamicPrice"
-                      stroke="var(--primary)"
-                      strokeWidth={2}
-                      fill="url(#priceGradient)"
+                      dataKey="renewPrice"
+                      stroke="#f59e0b"
+                      strokeWidth={3}
                       dot={false}
+                      name="Renew"
                     />
+                    {/* Retail tariff lines */}
+                    {Array.from(selectedTariffs).map((tariff, idx) => (
+                      <Line
+                        key={tariff}
+                        type="stepAfter"
+                        dataKey={tariff}
+                        stroke={`hsl(${idx * 60}, 70%, 50%)`}
+                        strokeWidth={1.5}
+                        strokeDasharray="6 3"
+                        dot={false}
+                      />
+                    ))}
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -282,11 +351,11 @@ export function ScreenPriceAnalysis({
       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:gap-x-4 sm:text-sm">
         <div className="flex items-center gap-1">
           <Info className="h-3 w-3 sm:h-4 sm:w-4" />
-          <span>Irish Tariffs:</span>
+          <span>Retail Tariffs (c/kWh):</span>
         </div>
-        <span>Day: €{IRISH_TARIFFS.day_rate.toFixed(4)}</span>
-        <span>Night: €{IRISH_TARIFFS.night_rate.toFixed(4)}</span>
-        <span>Peak: €{IRISH_TARIFFS.peak_rate.toFixed(4)}</span>
+        {Object.entries(RETAIL_TARIFFS).map(([name, tariff]) => (
+          <span key={name}>{name}: {tariff.rate}c</span>
+        ))}
       </div>
     </div>
   )
