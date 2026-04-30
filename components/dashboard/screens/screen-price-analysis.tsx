@@ -46,6 +46,7 @@ export function ScreenPriceAnalysis({
   const [tariffLoading, setTariffLoading] = useState(true)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
   const [showTariffDropdown, setShowTariffDropdown] = useState(false)
+  const [showTariffDropdown, setShowTariffDropdown] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -94,34 +95,30 @@ export function ScreenPriceAnalysis({
   const { prices: selectedPrices } = getSelectedData()
 
   // Convert 30-min periods to hourly data for chart
-  const chartData = []
-  for (let hour = 0; hour < 24; hour++) {
-    const period1 = selectedPrices.periods[hour * 2] // 00:00, 01:00, etc
-    const period2 = selectedPrices.periods[hour * 2 + 1] // 00:30, 01:30, etc
+  const chartData = selectedPrices.periods.map((period, idx) => {
+    const semPriceCentsKwh = period.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
+    const date = new Date(period.start_time_dublin)
 
-    if (period1) {
-      const semPriceCentsKwh = period1.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
-      const date = new Date(period1.start_time_dublin)
-
-      const dataPoint: Record<string, any> = {
-        hour,
-        time: date.toLocaleTimeString("en-IE", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Dublin",
-        }),
-        semPrice: semPriceCentsKwh,
-      }
-
-      // Add retail tariff prices (already in c/kWh)
-      retailTariffs.forEach((tariff) => {
-        dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate
-      })
-
-      chartData.push(dataPoint)
+    const dataPoint: Record<string, any> = {
+      periodIdx: idx,
+      time: date.toLocaleTimeString("en-IE", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Dublin",
+      }),
+      semPrice: semPriceCentsKwh,
+      quintile: period.quintile,
+      source: period.source,
     }
-  }
+
+    // Add retail tariff prices (already in c/kWh)
+    retailTariffs.forEach((tariff) => {
+      dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate
+    })
+
+    return dataPoint
+  })
 
   // Calculate min/max for Y-axis
   const allValues = chartData.flatMap((d) => {
@@ -138,7 +135,7 @@ export function ScreenPriceAnalysis({
   // Average SEM price
   const avgSemPrice = chartData.reduce((sum, d) => sum + d.semPrice, 0) / chartData.length || 0
 
-  const currentTimeStr = dayView === "today" ? chartData[Math.floor(currentPeriodIndex / 2)]?.time : null
+  const currentTimeStr = dayView === "today" ? chartData[currentPeriodIndex]?.time : null
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8 overflow-auto h-full">
@@ -192,47 +189,38 @@ export function ScreenPriceAnalysis({
         <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-base sm:text-lg">SEM vs Retail Tariffs</CardTitle>
 
-          {/* Tariff selector dropdown */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={() => setShowTariffDropdown(!showTariffDropdown)}
-              disabled={tariffLoading}
-            >
-              {tariffLoading ? (
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              ) : (
-                <ChevronDown className="h-3 w-3 mr-1" />
-              )}
-              {selectedTariffs.size === 0 ? "Select Tariffs" : `${selectedTariffs.size} Selected`}
-            </Button>
-
-            {showTariffDropdown && retailTariffs.length > 0 && (
-              <div className="absolute right-0 mt-1 bg-background border border-border rounded shadow-lg z-10 min-w-max">
-                {retailTariffs.map((tariff) => (
-                  <label
+          {/* Tariff selector inline checkboxes */}
+          <div className="flex flex-wrap gap-2">
+            {tariffLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              retailTariffs.map((tariff, idx) => {
+                const color = `hsl(${60 + idx * 80}, 70%, 55%)`
+                const isSelected = selectedTariffs.has(tariff.supplier)
+                return (
+                  <button
                     key={tariff.supplier}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-xs whitespace-nowrap"
+                    onClick={() => {
+                      const newSet = new Set(selectedTariffs)
+                      if (isSelected) newSet.delete(tariff.supplier)
+                      else newSet.add(tariff.supplier)
+                      setSelectedTariffs(newSet)
+                    }}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all ${
+                      isSelected
+                        ? "border-transparent text-white"
+                        : "border-border text-muted-foreground bg-transparent"
+                    }`}
+                    style={isSelected ? { backgroundColor: color, borderColor: color } : {}}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedTariffs.has(tariff.supplier)}
-                      onChange={(e) => {
-                        const newSet = new Set(selectedTariffs)
-                        if (e.target.checked) {
-                          newSet.add(tariff.supplier)
-                        } else {
-                          newSet.delete(tariff.supplier)
-                        }
-                        setSelectedTariffs(newSet)
-                      }}
+                    <span
+                      className="inline-block h-2 w-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: color }}
                     />
-                    {tariff.supplier} ({tariff.unitRate.toFixed(2)}c/kWh)
-                  </label>
-                ))}
-              </div>
+                    {tariff.supplier}
+                  </button>
+                )
+              })
             )}
           </div>
         </CardHeader>
@@ -254,7 +242,7 @@ export function ScreenPriceAnalysis({
                     tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
-                    interval={5}
+                    interval={3}
                   />
 
                   <YAxis

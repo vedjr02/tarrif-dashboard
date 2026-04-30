@@ -29,18 +29,13 @@ interface ScreenPriceCurveProps {
 
 type DayView = "today" | "tomorrow" | "yesterday"
 
-const IRISH_TARIFFS = {
-  day_rate: 0.4285,
-  night_rate: 0.2304,
-  peak_rate: 0.4899,
-  flat_rate: 0.2638,
-}
-
+// TODO: replace with real tariffs from getRetailTariffs()
 const getIrishTariffForPeriod = (periodIndex: number): number => {
   const hour = Math.floor(periodIndex / 2)
-  if (hour >= 17 && hour < 19) return IRISH_TARIFFS.peak_rate
-  if (hour >= 23 || hour < 8) return IRISH_TARIFFS.night_rate
-  return IRISH_TARIFFS.day_rate
+  // Placeholder rates - use getRetailTariffs() instead
+  if (hour >= 17 && hour < 19) return 0.4899 // peak
+  if (hour >= 23 || hour < 8) return 0.2304 // night
+  return 0.4285 // day
 }
 
 export function ScreenPriceCurve({
@@ -265,18 +260,6 @@ export function ScreenPriceCurve({
           </div>
         </CardContent>
       </Card>
-
-      {/* Tariff Info Footer */}
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:gap-x-5 sm:text-sm">
-        <div className="flex items-center gap-1">
-          <Info className="h-3 w-3 sm:h-4 sm:w-4" />
-          <span>Irish Tariffs:</span>
-        </div>
-        <span>Day: €{IRISH_TARIFFS.day_rate.toFixed(4)}/kWh</span>
-        <span>Night: €{IRISH_TARIFFS.night_rate.toFixed(4)}/kWh</span>
-        <span>Peak: €{IRISH_TARIFFS.peak_rate.toFixed(4)}/kWh</span>
-        <span className="text-muted-foreground/60">Semo PX</span>
-      </div>
     </div>
   )
 }
