@@ -45,6 +45,7 @@ export function ScreenPriceAnalysis({
   const [tariffError, setTariffError] = useState<string | null>(null)
   const [tariffLoading, setTariffLoading] = useState(true)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
+  const [renewMargin, setRenewMargin] = useState(2.0) // c/kWh margin for Renew tariff
 
   useEffect(() => {
     setMounted(true)
@@ -103,13 +104,17 @@ export function ScreenPriceAnalysis({
     return map
   }, [retailTariffs])
 
-  // Convert 30-min periods to chart data with tariff prices (re-runs when tariffs change)
+  // Convert 30-min periods to chart data with Renew and tariff prices (all in EUR/kWh)
   const chartData = useMemo(() => {
     if (!selectedPrices?.periods || selectedPrices.periods.length === 0) {
       return []
     }
     return selectedPrices.periods.map((period, idx) => {
-      const semPriceCentsKwh = period.price_eur_mwh / 10 // Convert EUR/MWh to c/kWh
+      // SEM price: EUR/MWh -> EUR/kWh (divide by 1000)
+      const semPriceEurKwh = period.price_eur_mwh / 1000
+      // Renew price: SEM + margin (margin is in c/kWh, convert to EUR/kWh)
+      const renewPriceEurKwh = semPriceEurKwh + (renewMargin / 100)
+      
       const date = new Date(period.start_time_dublin)
 
       const dataPoint: Record<string, any> = {
@@ -120,34 +125,34 @@ export function ScreenPriceAnalysis({
           hour12: false,
           timeZone: "Europe/Dublin",
         }),
-        semPrice: semPriceCentsKwh,
+        renewPrice: renewPriceEurKwh,
         quintile: period.quintile,
         source: period.source,
       }
 
-      // Add retail tariff prices (already in c/kWh)
+      // Add retail tariff prices (convert from c/kWh to EUR/kWh)
       retailTariffs.forEach((tariff) => {
-        dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate
+        dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate / 100
       })
 
       return dataPoint
     })
-  }, [selectedPrices, retailTariffs])
+  }, [selectedPrices, retailTariffs, renewMargin])
 
-  // Calculate min/max for Y-axis
+  // Calculate min/max for Y-axis (all values now in EUR/kWh)
   const allValues = chartData.flatMap((d) => {
-    const vals = [d.semPrice]
+    const vals = [d.renewPrice]
     retailTariffs.forEach((t) => {
       vals.push(d[`tariff_${t.supplier}`])
     })
     return vals
   })
   const minPrice = Math.min(...allValues) || 0
-  const maxPrice = Math.max(...allValues) || 50
+  const maxPrice = Math.max(...allValues) || 0.50
   const padding = (maxPrice - minPrice) * 0.15
 
-  // Average SEM price
-  const avgSemPrice = chartData.reduce((sum, d) => sum + d.semPrice, 0) / chartData.length || 0
+  // Average Renew price (EUR/kWh)
+  const avgRenewPrice = chartData.reduce((sum, d) => sum + d.renewPrice, 0) / chartData.length || 0
 
   const currentTimeStr = dayView === "today" ? chartData[currentPeriodIndex]?.time : null
 
@@ -188,20 +193,35 @@ export function ScreenPriceAnalysis({
       )}
 
       {/* Summary Card */}
-      <Card className="bg-primary/10 border-primary">
+      <Card className="bg-amber-100/30 border-amber-400">
         <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
-          <span className="text-xs font-medium text-foreground sm:text-sm">Average SEM Day-Ahead Price (Today)</span>
-          <span className="text-sm font-bold text-primary sm:text-base lg:text-lg">
-            {avgSemPrice.toFixed(2)}c/kWh
+          <span className="text-xs font-medium text-foreground sm:text-sm">Average Renew Price ({dayView})</span>
+          <span className="text-sm font-bold text-amber-600 sm:text-base lg:text-lg">
+            {avgRenewPrice.toFixed(4)} EUR/kWh
           </span>
-          <span className="text-xs text-muted-foreground mt-1">48-period average • SEM wholesale spot price</span>
+          <span className="text-xs text-muted-foreground mt-1">48-period average (SEM + {renewMargin.toFixed(1)}c margin)</span>
         </CardContent>
       </Card>
 
       {/* Comparison Curve Chart */}
       <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
         <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base sm:text-lg">SEM vs Retail Tariffs</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Renew vs Retail Tariffs</CardTitle>
+
+          {/* Renew margin input */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Renew margin:</label>
+            <input
+              type="number"
+              value={renewMargin}
+              onChange={(e) => setRenewMargin(parseFloat(e.target.value) || 2.0)}
+              step="0.1"
+              min="0"
+              max="10"
+              className="w-14 px-1.5 py-0.5 text-xs border border-border rounded bg-background"
+            />
+            <span className="text-xs text-muted-foreground">c/kWh</span>
+          </div>
 
           {/* Tariff selector inline checkboxes */}
           <div className="flex flex-wrap gap-2">
@@ -264,7 +284,7 @@ export function ScreenPriceAnalysis({
                     tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
-                    tickFormatter={(v) => `${v.toFixed(0)}c`}
+                    tickFormatter={(v) => `${v.toFixed(2)}`}
                     width={45}
                   />
 
@@ -277,14 +297,14 @@ export function ScreenPriceAnalysis({
                           <p className="text-sm font-bold text-foreground">{data.time}</p>
                           <div className="mt-1 space-y-1">
                             <div className="flex items-center justify-between gap-6">
-                              <span className="text-xs text-primary font-semibold">SEM Day-Ahead:</span>
-                              <span className="text-xs font-bold text-primary">{data.semPrice.toFixed(2)}c/kWh</span>
+                              <span className="text-xs text-amber-600 font-semibold">Renew:</span>
+                              <span className="text-xs font-bold text-amber-600">{data.renewPrice.toFixed(4)} EUR/kWh</span>
                             </div>
                             {Array.from(selectedTariffs).map((supplier) => (
                               <div key={supplier} className="flex items-center justify-between gap-6">
                                 <span className="text-xs text-muted-foreground">{supplier}:</span>
                                 <span className="text-xs font-bold text-muted-foreground">
-                                  {data[`tariff_${supplier}`]?.toFixed(2)}c/kWh
+                                  {data[`tariff_${supplier}`]?.toFixed(4)} EUR/kWh
                                 </span>
                               </div>
                             ))}
@@ -303,14 +323,14 @@ export function ScreenPriceAnalysis({
                     />
                   )}
 
-                  {/* SEM Day-Ahead line - always shown */}
+                  {/* Renew line - always shown, bold amber/orange */}
                   <Line
                     type="monotone"
-                    dataKey="semPrice"
-                    stroke="var(--primary)"
+                    dataKey="renewPrice"
+                    stroke="#f59e0b"
                     strokeWidth={3}
                     dot={false}
-                    name="SEM Day-Ahead"
+                    name="Renew"
                   />
 
                   {/* Retail tariff lines - selected only */}
