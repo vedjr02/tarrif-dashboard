@@ -8,7 +8,6 @@ import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
 import { ScreenPriceAnalysis } from "./screens/screen-price-analysis"
 import { ScreenGridForecast } from "./screens/screen-grid-forecast"
-import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
 
 interface PricesApiResponse {
@@ -34,7 +33,6 @@ const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
   { id: "price-analysis", label: "Price Analysis" },
   { id: "grid-forecast", label: "Grid & Forecast" },
-  { id: "operations", label: "Operations & Savings" },
 ]
 
 const DEFAULT_ROTATION_INTERVAL = 15000 // 15 seconds
@@ -225,15 +223,6 @@ export function Dashboard() {
           )}
           {currentScreen === 2 && (
             <ScreenGridForecast
-              currentPeriodIndex={currentPeriodIndex}
-            />
-          )}
-          {currentScreen === 3 && (
-            <ScreenOperationsSavings
-              currentPrice={currentPrice}
-              currentTariff={currentTariff}
-              dayPrices={todayPrices}
-              dayTariffs={todayTariffs}
               currentPeriodIndex={currentPeriodIndex}
             />
           )}
