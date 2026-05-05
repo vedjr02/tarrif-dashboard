@@ -195,7 +195,7 @@ export function ScreenPriceAnalysis({
         <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
           <span className="text-xs font-medium text-foreground sm:text-sm">Average Renew Price ({dayView})</span>
           <span className="text-sm font-bold text-amber-600 sm:text-base lg:text-lg">
-            {avgRenewPrice.toFixed(4)} EUR/kWh
+            {Math.abs(avgRenewPrice).toFixed(4)} EUR/kWh
           </span>
           <span className="text-xs text-muted-foreground mt-1">48-period average SEM wholesale spot price</span>
         </CardContent>
@@ -294,7 +294,7 @@ export function ScreenPriceAnalysis({
                                 className="text-xs font-bold"
                                 style={{ color: getPriceColor(data.renewPrice * 1000, data.quintile as Quintile) }}
                               >
-                                {data.renewPrice.toFixed(4)} EUR/kWh
+                                {Math.abs(data.renewPrice).toFixed(4)} EUR/kWh
                               </span>
                             </div>
                             {Array.from(selectedTariffs).map((supplier) => (

@@ -165,7 +165,7 @@ export function ScreenPriceStatistics({
                 <div className="text-center">
                   <div className="flex items-baseline justify-center gap-1.5">
                     <span className="text-5xl font-bold tabular-nums text-foreground sm:text-6xl lg:text-8xl">
-                      {currentPrice.price_eur_mwh.toFixed(1)}
+                      {Math.abs(currentPrice.price_eur_mwh).toFixed(1)}
                     </span>
                     <span className="text-lg text-muted-foreground sm:text-xl lg:text-2xl">€/MWh</span>
                   </div>
@@ -207,9 +207,9 @@ export function ScreenPriceStatistics({
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
         {[
-          { icon: TrendingDown, label: "Daily Min", value: `€${currentPrice.daily_min.toFixed(1)}`, color: "text-primary" },
-          { icon: TrendingUp, label: "Daily Max", value: `€${currentPrice.daily_max.toFixed(1)}`, color: "text-destructive" },
-          { icon: Activity, label: "Daily Avg", value: `€${currentPrice.daily_avg.toFixed(1)}`, color: "text-muted-foreground" },
+          { icon: TrendingDown, label: "Daily Min", value: `€${Math.abs(currentPrice.daily_min).toFixed(1)}`, color: "text-primary" },
+          { icon: TrendingUp, label: "Daily Max", value: `€${Math.abs(currentPrice.daily_max).toFixed(1)}`, color: "text-destructive" },
+          { icon: Activity, label: "Daily Avg", value: `€${Math.abs(currentPrice.daily_avg).toFixed(1)}`, color: "text-muted-foreground" },
           { icon: Clock, label: "Next Change", value: countdown, color: "text-accent", mono: true },
         ].map(({ icon: Icon, label, value, color, mono }) => (
           <Card key={label} className="bg-card/50">
@@ -252,7 +252,7 @@ export function ScreenPriceStatistics({
                     {formatTime(period.start_time_dublin)}
                   </span>
                   <span className="text-xl font-bold tabular-nums text-foreground sm:text-3xl lg:text-5xl">
-                    {period.price_eur_mwh.toFixed(0)}
+                    {Math.abs(period.price_eur_mwh).toFixed(0)}
                   </span>
                   <span className="text-xs text-muted-foreground">€/MWh</span>
                   {tariffPeriod && (
