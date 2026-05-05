@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import type { DayPrices, DayTariffs } from "@/lib/types"
+import type { DayPrices, DayTariffs, Quintile } from "@/lib/types"
+import { getPriceColor } from "@/lib/types"
 import {
   Line,
   ComposedChart,
@@ -279,8 +280,22 @@ export function ScreenPriceAnalysis({
                           <p className="text-sm font-bold text-foreground">{data.time}</p>
                           <div className="mt-1 space-y-1">
                             <div className="flex items-center justify-between gap-6">
-                              <span className="text-xs text-amber-600 font-semibold">Renew:</span>
-                              <span className="text-xs font-bold text-amber-600">{data.renewPrice.toFixed(4)} EUR/kWh</span>
+                              <span 
+                                className="flex items-center gap-1 text-xs font-semibold"
+                                style={{ color: getPriceColor(data.renewPrice * 1000, data.quintile as Quintile) }}
+                              >
+                                <span 
+                                  className="h-2 w-2 rounded-full"
+                                  style={{ backgroundColor: getPriceColor(data.renewPrice * 1000, data.quintile as Quintile) }}
+                                />
+                                Renew:
+                              </span>
+                              <span 
+                                className="text-xs font-bold"
+                                style={{ color: getPriceColor(data.renewPrice * 1000, data.quintile as Quintile) }}
+                              >
+                                {data.renewPrice.toFixed(4)} EUR/kWh
+                              </span>
                             </div>
                             {Array.from(selectedTariffs).map((supplier) => (
                               <div key={supplier} className="flex items-center justify-between gap-6">

@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Info } from "lucide-react"
 import type { DayPrices, DayTariffs, Quintile } from "@/lib/types"
-import { getQuintileColor, getSignalText } from "@/lib/types"
+import { getQuintileColor, getPriceColor, getSignalText } from "@/lib/types"
 
 interface ScreenPriceCurveProps {
   todayPrices: DayPrices
@@ -216,7 +216,7 @@ export function ScreenPriceCurve({
                           <div className="flex items-center gap-2 border-t border-border pt-1">
                             <span
                               className="h-2 w-2 rounded-full"
-                              style={{ backgroundColor: getQuintileColor(data.quintile as Quintile) }}
+                              style={{ backgroundColor: getPriceColor(data.dynamicPrice, data.quintile as Quintile) }}
                             />
                             <span className="text-xs text-muted-foreground">
                               {getSignalText(data.quintile)}

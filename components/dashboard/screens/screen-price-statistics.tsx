@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown, Minus, Zap, Clock, Activity } from "lucide-re
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { CurrentPrice, CurrentTariff, PricePeriod, DayPrices, DayTariffs, Quintile } from "@/lib/types"
-import { getQuintileColor, QUINTILE_CONFIG } from "@/lib/types"
+import { getQuintileColor, getPriceColor, QUINTILE_CONFIG } from "@/lib/types"
 
 interface ScreenPriceStatisticsProps {
   currentPrice: CurrentPrice
@@ -98,12 +98,10 @@ export function ScreenPriceStatistics({
             <div className="flex items-end gap-px" style={{ height: "80px" }}>
               {dayPrices.periods.map((period, idx) => {
                 const isNow = idx === currentPeriodIndex
-                const heightPct =
-                  currentPrice.daily_max > currentPrice.daily_min
-                    ? ((period.price_eur_mwh - currentPrice.daily_min) /
-                        (currentPrice.daily_max - currentPrice.daily_min)) *
-                        80 + 20
-                    : 50
+                const range = currentPrice.daily_max - currentPrice.daily_min
+                const heightPct = range > 0
+                  ? ((period.price_eur_mwh - currentPrice.daily_min) / range) * 80 + 20
+                  : 50
                 return (
                   <div
                     key={period.period}
@@ -115,7 +113,7 @@ export function ScreenPriceStatistics({
                       className="absolute bottom-0 w-full rounded-t-sm"
                       style={{
                         height: `${heightPct}%`,
-                        backgroundColor: getQuintileColor(period.quintile as Quintile),
+                        backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile),
                         opacity: isNow ? 1 : 0.65,
                         outline: isNow ? "2px solid white" : "none",
                         outlineOffset: "1px",
@@ -150,12 +148,12 @@ export function ScreenPriceStatistics({
         {/* Current Price Display */}
         <Card
           className="overflow-hidden border-4"
-          style={{ borderColor: getQuintileColor(currentPrice.quintile as Quintile) }}
+          style={{ borderColor: getPriceColor(currentPrice.price_eur_mwh, currentPrice.quintile as Quintile) }}
         >
           <CardContent className="p-0">
             <div
               className="px-4 py-2 text-center"
-              style={{ backgroundColor: getQuintileColor(currentPrice.quintile as Quintile) }}
+              style={{ backgroundColor: getPriceColor(currentPrice.price_eur_mwh, currentPrice.quintile as Quintile) }}
             >
               <span className="text-base font-bold uppercase tracking-wider text-background sm:text-xl lg:text-2xl">
                 {quintileConfig.signal}
@@ -267,7 +265,7 @@ export function ScreenPriceStatistics({
                   )}
                   <div
                     className="mt-1.5 h-2 w-2 rounded-full sm:h-3 sm:w-3"
-                    style={{ backgroundColor: getQuintileColor(period.quintile as Quintile) }}
+                    style={{ backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile) }}
                   />
                 </div>
               )
