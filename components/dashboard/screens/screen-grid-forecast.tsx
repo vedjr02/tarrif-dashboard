@@ -6,38 +6,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Area,
   AreaChart,
-  Line,
-  ComposedChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
   ReferenceLine,
 } from "recharts"
-import { Loader2, Wind, Zap, Leaf, Activity, AlertTriangle } from "lucide-react"
+import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge } from "lucide-react"
 
 interface WindDataPoint {
   timestamp: string
-  actual: number | null
-  forecast: number | null
+  windSpeed: number // km/h
+  windDirection: number // degrees
+  windGusts: number // km/h
 }
 
 interface GridStatus {
   frequency: number | null
   co2Intensity: number | null
-  renewablePercent: number | null
-  windGeneration: number | null
-  totalGeneration: number | null
   demand: number | null
 }
 
-interface EirGridResponse {
+interface ApiResponse {
   windData: WindDataPoint[]
   gridStatus: GridStatus
   fetchedAt: string
-  hasData: boolean
-  serverError?: boolean
-  errorMessage?: string
+  hasWindData: boolean
+  hasGridData: boolean
+  windError?: boolean
+  gridError?: boolean
 }
 
 interface ScreenGridForecastProps {
@@ -60,31 +57,45 @@ const getTimeOfUseBand = (hour: number): { band: string; color: string; bgColor:
   return { band: "Day", color: "var(--q3-average)", bgColor: "var(--q3-average)" }
 }
 
+// Wind direction to cardinal direction
+const getWindDirection = (degrees: number): string => {
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+  const index = Math.round(degrees / 45) % 8
+  return directions[index]
+}
+
 export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastProps) {
   const [mounted, setMounted] = useState(false)
-  const [lastValidData, setLastValidData] = useState<EirGridResponse | null>(null)
-  const [lastDataTime, setLastDataTime] = useState<string | null>(null)
+  const [lastValidWindData, setLastValidWindData] = useState<WindDataPoint[]>([])
+  const [lastValidGridStatus, setLastValidGridStatus] = useState<GridStatus | null>(null)
+  const [lastWindDataTime, setLastWindDataTime] = useState<string | null>(null)
+  const [lastGridDataTime, setLastGridDataTime] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const { data, isLoading } = useSWR<EirGridResponse>("/api/eirgrid", fetcher, {
+  const { data, isLoading } = useSWR<ApiResponse>("/api/eirgrid", fetcher, {
     refreshInterval: 30000, // Poll every 30 seconds
     revalidateOnFocus: true,
   })
   
   // Store last valid data when we receive it
   useEffect(() => {
-    if (data?.hasData && data.windData.length > 0) {
-      setLastValidData(data)
-      setLastDataTime(data.fetchedAt)
+    if (data?.hasWindData && data.windData.length > 0) {
+      setLastValidWindData(data.windData)
+      setLastWindDataTime(data.fetchedAt)
+    }
+    if (data?.hasGridData) {
+      setLastValidGridStatus(data.gridStatus)
+      setLastGridDataTime(data.fetchedAt)
     }
   }, [data])
   
   // Use current data if available, otherwise use last valid data
-  const displayData = data?.hasData ? data : lastValidData
-  const isServerError = data?.serverError && !data?.hasData
+  const displayWindData = data?.hasWindData ? data.windData : lastValidWindData
+  const displayGridStatus = data?.hasGridData ? data.gridStatus : lastValidGridStatus
+  const isGridError = data?.gridError && !data?.hasGridData
 
   // Get current hour in Dublin
   const currentHour = useMemo(() => {
@@ -96,11 +107,33 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
 
   const currentBand = getTimeOfUseBand(currentHour)
 
+  // Get current wind data
+  const currentWindData = useMemo(() => {
+    if (!displayWindData.length) return null
+    const now = new Date()
+    const currentHourStr = now.toLocaleTimeString("en-IE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Dublin",
+    }).slice(0, 2) + ":00"
+    
+    return displayWindData.find(d => {
+      const windHour = new Date(d.timestamp).toLocaleTimeString("en-IE", {
+        hour: "2-digit",
+        minute: "2-digit", 
+        hour12: false,
+        timeZone: "Europe/Dublin",
+      }).slice(0, 2) + ":00"
+      return windHour === currentHourStr
+    }) || displayWindData[displayWindData.length - 1]
+  }, [displayWindData])
+
   // Process wind data for chart
   const chartData = useMemo(() => {
-    if (!displayData?.windData) return []
+    if (!displayWindData.length) return []
 
-    return displayData.windData.map((point) => {
+    return displayWindData.map((point) => {
       const date = new Date(point.timestamp)
       const hour = date.getHours()
       const band = getTimeOfUseBand(hour)
@@ -112,14 +145,23 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
           hour12: false,
           timeZone: "Europe/Dublin",
         }),
-        actual: point.actual,
-        forecast: point.forecast,
+        fullTime: date.toLocaleString("en-IE", {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: "Europe/Dublin",
+        }),
+        windSpeed: point.windSpeed,
+        windGusts: point.windGusts,
+        windDirection: point.windDirection,
         hour,
         band: band.band,
         bandColor: band.color,
       }
     })
-  }, [displayData?.windData])
+  }, [displayWindData])
 
   // Get current time string for reference line
   const currentTimeStr = useMemo(() => {
@@ -131,8 +173,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
       timeZone: "Europe/Dublin",
     })
   }, [])
-
-  const gridStatus = displayData?.gridStatus
   
   // Format last data time for display
   const formatDataTime = (isoString: string | null) => {
@@ -149,12 +189,12 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8 overflow-auto h-full">
-      {/* Server Error Warning */}
-      {isServerError && (
+      {/* Grid Server Error Warning */}
+      {isGridError && lastGridDataTime && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span className="text-xs sm:text-sm">
-            EirGrid server unavailable - {lastDataTime ? `showing data from ${formatDataTime(lastDataTime)}` : "no data available"}
+            EirGrid server unavailable - grid data from {formatDataTime(lastGridDataTime)}
           </span>
         </div>
       )}
@@ -163,15 +203,15 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-bold text-foreground sm:text-2xl lg:text-3xl">
-            Grid & Forecast
+            Grid & Wind Forecast
           </h2>
           <p className="text-xs text-muted-foreground sm:text-sm lg:text-base">
-            Real-time grid status and wind generation forecast
+            Wind speed forecast and grid status for Ireland
           </p>
         </div>
-        {lastDataTime && displayData && (
+        {lastWindDataTime && (
           <div className="text-xs text-muted-foreground">
-            Last updated: {formatDataTime(lastDataTime)}
+            Wind data: {formatDataTime(lastWindDataTime)}
           </div>
         )}
       </div>
@@ -238,37 +278,44 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         </CardContent>
       </Card>
 
-      {/* Grid Status Cards */}
+      {/* Status Cards */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
+        {/* Current Wind Speed */}
         <Card className="border-l-4" style={{ borderLeftColor: "var(--q1-cheap)" }}>
           <CardContent className="p-2 sm:p-3 lg:p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
               <Wind className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Wind</span>
+              <span className="text-xs sm:text-sm">Wind Speed</span>
             </div>
             <div className="text-lg font-bold sm:text-xl lg:text-2xl">
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
-              ) : gridStatus?.windGeneration != null ? (
-                `${Math.round(gridStatus.windGeneration)} MW`
+              ) : currentWindData ? (
+                `${Math.round(currentWindData.windSpeed)} km/h`
               ) : (
                 "--"
               )}
             </div>
+            {currentWindData && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {getWindDirection(currentWindData.windDirection)}
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* Wind Gusts */}
         <Card className="border-l-4" style={{ borderLeftColor: "var(--q2-below)" }}>
           <CardContent className="p-2 sm:p-3 lg:p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Leaf className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Renewable</span>
+              <Gauge className="h-4 w-4" />
+              <span className="text-xs sm:text-sm">Gusts</span>
             </div>
             <div className="text-lg font-bold sm:text-xl lg:text-2xl">
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
-              ) : gridStatus?.renewablePercent != null ? (
-                `${gridStatus.renewablePercent.toFixed(0)}%`
+              ) : currentWindData ? (
+                `${Math.round(currentWindData.windGusts)} km/h`
               ) : (
                 "--"
               )}
@@ -276,6 +323,7 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
           </CardContent>
         </Card>
 
+        {/* Grid Frequency */}
         <Card className="border-l-4" style={{ borderLeftColor: "var(--q4-above)" }}>
           <CardContent className="p-2 sm:p-3 lg:p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -285,8 +333,8 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
             <div className="text-lg font-bold sm:text-xl lg:text-2xl">
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
-              ) : gridStatus?.frequency != null ? (
-                `${gridStatus.frequency.toFixed(2)} Hz`
+              ) : displayGridStatus?.frequency != null ? (
+                `${displayGridStatus.frequency.toFixed(2)} Hz`
               ) : (
                 "--"
               )}
@@ -294,6 +342,7 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
           </CardContent>
         </Card>
 
+        {/* Grid Demand */}
         <Card className="border-l-4" style={{ borderLeftColor: "var(--q3-average)" }}>
           <CardContent className="p-2 sm:p-3 lg:p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -303,8 +352,8 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
             <div className="text-lg font-bold sm:text-xl lg:text-2xl">
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
-              ) : gridStatus?.demand != null ? (
-                `${Math.round(gridStatus.demand)} MW`
+              ) : displayGridStatus?.demand != null ? (
+                `${Math.round(displayGridStatus.demand)} MW`
               ) : (
                 "--"
               )}
@@ -313,23 +362,27 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         </Card>
       </div>
 
-      {/* Wind Forecast Chart */}
+      {/* Wind Speed Forecast Chart */}
       <Card className="flex-1 min-h-0 flex flex-col">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm sm:text-base flex items-center gap-2">
             <Wind className="h-4 w-4" />
-            Wind Generation - Actual vs Forecast
+            Wind Speed Forecast (Dublin)
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 p-2 sm:p-4">
           <div className="w-full h-[250px] sm:h-[300px] lg:h-[350px] relative">
             {mounted && chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                   <defs>
-                    <linearGradient id="windActualGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="windSpeedGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--q1-cheap)" stopOpacity={0.4} />
                       <stop offset="95%" stopColor="var(--q1-cheap)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="windGustsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--q4-above)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--q4-above)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
 
@@ -346,9 +399,9 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
                     tickFormatter={(v) => `${Math.round(v)}`}
-                    width={45}
+                    width={35}
                     label={{
-                      value: "MW",
+                      value: "km/h",
                       angle: -90,
                       position: "insideLeft",
                       style: { fontSize: 10, fill: "var(--muted-foreground)" },
@@ -361,7 +414,7 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                       const data = payload[0].payload
                       return (
                         <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-xl">
-                          <p className="text-sm font-bold text-foreground">{data.time}</p>
+                          <p className="text-sm font-bold text-foreground">{data.fullTime}</p>
                           <div
                             className="text-xs px-2 py-0.5 rounded-full mt-1 mb-2 inline-block text-white"
                             style={{ backgroundColor: data.bandColor }}
@@ -369,24 +422,22 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                             {data.band}
                           </div>
                           <div className="space-y-1">
-                            {data.actual != null && (
-                              <div className="flex items-center justify-between gap-4">
-                                <span className="text-xs" style={{ color: "var(--q1-cheap)" }}>
-                                  Actual:
-                                </span>
-                                <span className="text-xs font-bold">
-                                  {Math.round(data.actual)} MW
-                                </span>
-                              </div>
-                            )}
-                            {data.forecast != null && (
-                              <div className="flex items-center justify-between gap-4">
-                                <span className="text-xs text-muted-foreground">Forecast:</span>
-                                <span className="text-xs font-bold text-muted-foreground">
-                                  {Math.round(data.forecast)} MW
-                                </span>
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-xs" style={{ color: "var(--q1-cheap)" }}>
+                                Wind:
+                              </span>
+                              <span className="text-xs font-bold">
+                                {Math.round(data.windSpeed)} km/h {getWindDirection(data.windDirection)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-xs" style={{ color: "var(--q4-above)" }}>
+                                Gusts:
+                              </span>
+                              <span className="text-xs font-bold">
+                                {Math.round(data.windGusts)} km/h
+                              </span>
+                            </div>
                           </div>
                         </div>
                       )
@@ -400,27 +451,27 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     strokeDasharray="6 3"
                   />
 
-                  {/* Actual wind - filled area */}
+                  {/* Wind gusts - background area */}
                   <Area
                     type="monotone"
-                    dataKey="actual"
-                    stroke="var(--q1-cheap)"
-                    strokeWidth={2}
-                    fill="url(#windActualGradient)"
-                    name="Actual"
+                    dataKey="windGusts"
+                    stroke="var(--q4-above)"
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    fill="url(#windGustsGradient)"
+                    name="Gusts"
                   />
 
-                  {/* Forecast wind - dashed line */}
-                  <Line
+                  {/* Wind speed - main area */}
+                  <Area
                     type="monotone"
-                    dataKey="forecast"
-                    stroke="var(--muted-foreground)"
-                    strokeWidth={1.5}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Forecast"
+                    dataKey="windSpeed"
+                    stroke="var(--q1-cheap)"
+                    strokeWidth={2}
+                    fill="url(#windSpeedGradient)"
+                    name="Wind Speed"
                   />
-                </ComposedChart>
+                </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full">
