@@ -146,41 +146,52 @@ async function fetchEntsoePrices(tradingDay: string): Promise<PricePeriod[] | nu
   }
 }
 
-// Parse SEMO CSV and extract ROI-DA prices
+// Parse SEMO CSV and extract ROI-DA EUR prices
+// CSV structure:
+//   Market Area;ROI-DA
+//   Index prices;60;EUR
+//   2025-05-24T22:00:00Z;2025-05-24T23:00:00Z;... (timestamps)
+//   15,000;0,000;-0,100;-4,000;... (prices in EUR/MWh)
 function parseSemoCsv(csvContent: string): number[] | null {
   try {
     const lines = csvContent.split('\n')
     let inRoiSection = false
-    let foundEurPrices = false
+    let foundEurPricesHeader = false
+    let skippedTimestampLine = false
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim()
       
+      // Enter ROI-DA section
       if (line.startsWith('Market Area;ROI-DA')) {
         inRoiSection = true
-        foundEurPrices = false
+        foundEurPricesHeader = false
+        skippedTimestampLine = false
         continue
       }
       
+      // Exit ROI-DA section when we hit another Market Area
       if (inRoiSection && line.startsWith('Market Area;') && !line.includes('ROI-DA')) {
         inRoiSection = false
         continue
       }
       
-      // Accept both 30-min and 60-min resolution
+      // Found EUR prices header
       if (inRoiSection && (line.startsWith('Index prices;60;EUR') || line.startsWith('Index prices;30;EUR'))) {
-        foundEurPrices = true
+        foundEurPricesHeader = true
+        skippedTimestampLine = false
         continue
       }
       
-      // Skip timestamp line
-      if (foundEurPrices && line.includes('T') && line.includes('Z')) {
+      // Skip the timestamp line (contains ISO dates like 2025-05-24T22:00:00Z)
+      if (foundEurPricesHeader && !skippedTimestampLine && line.includes('T') && line.includes('Z')) {
+        skippedTimestampLine = true
         continue
       }
       
-      // Parse prices line - semicolon separated, comma as decimal separator
-      if (inRoiSection && foundEurPrices && line.includes(';') && !line.includes('T')) {
-        // Split by semicolon and process each value
+      // This is THE prices line - immediately after timestamp line
+      // Format: 15,000;0,000;-0,100;-4,000;... (comma = decimal separator)
+      if (foundEurPricesHeader && skippedTimestampLine) {
         const parts = line.split(';')
         const prices: number[] = []
         
@@ -188,26 +199,31 @@ function parseSemoCsv(csvContent: string): number[] | null {
           const trimmed = part.trim()
           if (!trimmed) continue
           
-          // Replace comma with dot for decimal parsing (European format: 33,24 -> 33.24)
+          // Replace comma with dot for decimal parsing (European format: 15,000 -> 15.000)
           const normalized = trimmed.replace(',', '.')
           const value = parseFloat(normalized)
           
-          // Validate: price should be positive and reasonable (0-1000 EUR/MWh)
-          if (!isNaN(value) && value >= 0 && value < 1000) {
+          // Accept any valid number (including negatives - DAM can have negative prices)
+          if (!isNaN(value)) {
             prices.push(value)
           }
         }
         
-        // Need at least 20 valid prices (for 24 hours or 48 half-hours)
+        // We found the prices line - return if we have enough values
         if (prices.length >= 20) {
-          console.log("[v0] Parsed SEMO prices, first 3:", prices.slice(0, 3))
           return prices
         }
+        
+        // If we got here but don't have enough prices, something is wrong
+        // Reset and keep looking for another Index prices;60;EUR section
+        foundEurPricesHeader = false
+        skippedTimestampLine = false
       }
     }
     
     return null
-  } catch {
+  } catch (e) {
+    console.error("[v0] SEMO CSV parse error:", e)
     return null
   }
 }

@@ -93,8 +93,6 @@ export function ScreenPriceAnalysis({
   }
 
   const { prices: selectedPrices } = getSelectedData()
-  
-  console.log("[v0] selectedPrices first period:", selectedPrices?.periods?.[0])
 
   // Build stable color map for tariffs (indexed by supplier position)
   const tariffColorMap = useMemo(() => {
