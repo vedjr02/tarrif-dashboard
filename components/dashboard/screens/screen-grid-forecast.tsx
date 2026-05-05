@@ -36,6 +36,7 @@ interface EirGridResponse {
   gridStatus: GridStatus
   fetchedAt: string
   error?: string
+  isDemo?: boolean
 }
 
 interface ScreenGridForecastProps {

@@ -142,29 +142,65 @@ export async function GET() {
       demand: getLatestValue(demand),
     }
     
+    // If we have no real data, return fallback demo data
+    const hasRealData = windData.length > 0 || Object.values(gridStatus).some(v => v !== null)
+    if (!hasRealData) {
+      return NextResponse.json(generateFallbackData(), { status: 200 })
+    }
+    
     return NextResponse.json({
       windData,
       gridStatus,
       fetchedAt: new Date().toISOString(),
+      isDemo: false,
     })
     
   } catch (error) {
     console.error("[EirGrid API] Error:", error)
-    return NextResponse.json(
-      { 
-        windData: [], 
-        gridStatus: {
-          frequency: null,
-          co2Intensity: null,
-          renewablePercent: null,
-          windGeneration: null,
-          totalGeneration: null,
-          demand: null,
-        },
-        error: "Failed to fetch EirGrid data",
-        fetchedAt: new Date().toISOString(),
-      },
-      { status: 200 } // Return 200 with empty data to avoid breaking UI
-    )
+    return NextResponse.json(generateFallbackData(), { status: 200 })
+  }
+}
+
+// Generate realistic demo data when EirGrid API is unavailable
+function generateFallbackData() {
+  const now = new Date()
+  const windData: { timestamp: string; actual: number | null; forecast: number | null }[] = []
+  
+  // Generate 48 hours of wind data (yesterday, today, tomorrow)
+  for (let i = -24; i < 48; i++) {
+    const time = new Date(now.getTime() + i * 60 * 60 * 1000)
+    const hour = time.getHours()
+    
+    // Simulate wind patterns - higher at night, lower during day
+    const baseWind = 1800 + Math.sin((hour - 6) * Math.PI / 12) * 400
+    const variance = Math.random() * 200 - 100
+    const actual = i <= 0 ? Math.round(baseWind + variance) : null
+    const forecast = Math.round(baseWind + (Math.random() * 150 - 75))
+    
+    windData.push({
+      timestamp: time.toISOString(),
+      actual,
+      forecast,
+    })
+  }
+  
+  // Current hour simulation
+  const currentHour = now.getHours()
+  const baseWind = 1800 + Math.sin((currentHour - 6) * Math.PI / 12) * 400
+  const windGeneration = Math.round(baseWind + Math.random() * 200 - 100)
+  const totalGeneration = Math.round(windGeneration * 2.5 + 1000) // Wind is ~40% of total
+  
+  return {
+    windData,
+    gridStatus: {
+      frequency: 49.98 + Math.random() * 0.04, // ~50Hz
+      co2Intensity: Math.round(250 + Math.random() * 100), // gCO2/kWh
+      renewablePercent: Math.round((windGeneration / totalGeneration) * 100),
+      windGeneration,
+      totalGeneration,
+      demand: Math.round(totalGeneration * 0.95 + Math.random() * 100),
+    },
+    fetchedAt: new Date().toISOString(),
+    isDemo: true, // Flag to indicate demo data
   }
 }
