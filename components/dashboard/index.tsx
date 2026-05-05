@@ -6,6 +6,7 @@ import { Header } from "./header"
 import { Footer } from "./footer"
 import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
+import { ScreenPriceAnalysis } from "./screens/screen-price-analysis"
 import { ScreenGridForecast } from "./screens/screen-grid-forecast"
 import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
@@ -31,6 +32,7 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
+  { id: "price-analysis", label: "Price Analysis" },
   { id: "grid-forecast", label: "Grid & Forecast" },
   { id: "operations", label: "Operations & Savings" },
 ]
@@ -211,11 +213,22 @@ export function Dashboard() {
             />
           )}
           {currentScreen === 1 && (
-            <ScreenGridForecast
+            <ScreenPriceAnalysis
+              todayPrices={todayPrices}
+              todayTariffs={todayTariffs}
+              tomorrowPrices={tomorrowPrices}
+              tomorrowTariffs={data?.tomorrowTariffs ?? null}
+              yesterdayPrices={yesterdayPrices}
+              yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
             />
           )}
           {currentScreen === 2 && (
+            <ScreenGridForecast
+              currentPeriodIndex={currentPeriodIndex}
+            />
+          )}
+          {currentScreen === 3 && (
             <ScreenOperationsSavings
               currentPrice={currentPrice}
               currentTariff={currentTariff}
