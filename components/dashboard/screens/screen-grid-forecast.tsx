@@ -14,7 +14,7 @@ import {
   YAxis,
   ReferenceLine,
 } from "recharts"
-import { Loader2, Wind, Zap, Leaf, Activity } from "lucide-react"
+import { Loader2, Wind, Zap, Leaf, Activity, AlertTriangle } from "lucide-react"
 
 interface WindDataPoint {
   timestamp: string
@@ -35,8 +35,9 @@ interface EirGridResponse {
   windData: WindDataPoint[]
   gridStatus: GridStatus
   fetchedAt: string
-  error?: string
-  isDemo?: boolean
+  hasData: boolean
+  serverError?: boolean
+  errorMessage?: string
 }
 
 interface ScreenGridForecastProps {
@@ -61,15 +62,29 @@ const getTimeOfUseBand = (hour: number): { band: string; color: string; bgColor:
 
 export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastProps) {
   const [mounted, setMounted] = useState(false)
+  const [lastValidData, setLastValidData] = useState<EirGridResponse | null>(null)
+  const [lastDataTime, setLastDataTime] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   const { data, isLoading } = useSWR<EirGridResponse>("/api/eirgrid", fetcher, {
-    refreshInterval: 300000, // 5 minutes
+    refreshInterval: 30000, // Poll every 30 seconds
     revalidateOnFocus: true,
   })
+  
+  // Store last valid data when we receive it
+  useEffect(() => {
+    if (data?.hasData && data.windData.length > 0) {
+      setLastValidData(data)
+      setLastDataTime(data.fetchedAt)
+    }
+  }, [data])
+  
+  // Use current data if available, otherwise use last valid data
+  const displayData = data?.hasData ? data : lastValidData
+  const isServerError = data?.serverError && !data?.hasData
 
   // Get current hour in Dublin
   const currentHour = useMemo(() => {
@@ -83,9 +98,9 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
 
   // Process wind data for chart
   const chartData = useMemo(() => {
-    if (!data?.windData) return []
+    if (!displayData?.windData) return []
 
-    return data.windData.map((point) => {
+    return displayData.windData.map((point) => {
       const date = new Date(point.timestamp)
       const hour = date.getHours()
       const band = getTimeOfUseBand(hour)
@@ -104,7 +119,7 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         bandColor: band.color,
       }
     })
-  }, [data?.windData])
+  }, [displayData?.windData])
 
   // Get current time string for reference line
   const currentTimeStr = useMemo(() => {
@@ -117,10 +132,33 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
     })
   }, [])
 
-  const gridStatus = data?.gridStatus
+  const gridStatus = displayData?.gridStatus
+  
+  // Format last data time for display
+  const formatDataTime = (isoString: string | null) => {
+    if (!isoString) return null
+    const date = new Date(isoString)
+    return date.toLocaleString("en-IE", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Dublin",
+    })
+  }
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-4 sm:p-5 lg:gap-6 lg:p-8 overflow-auto h-full">
+      {/* Server Error Warning */}
+      {isServerError && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="text-xs sm:text-sm">
+            EirGrid server unavailable - {lastDataTime ? `showing data from ${formatDataTime(lastDataTime)}` : "no data available"}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -131,6 +169,11 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
             Real-time grid status and wind generation forecast
           </p>
         </div>
+        {lastDataTime && displayData && (
+          <div className="text-xs text-muted-foreground">
+            Last updated: {formatDataTime(lastDataTime)}
+          </div>
+        )}
       </div>
 
       {/* Time-of-Use Bands Visual */}
