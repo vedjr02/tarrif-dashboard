@@ -167,7 +167,8 @@ function parseSemoCsv(csvContent: string): number[] | null {
         continue
       }
       
-      if (inRoiSection && line.startsWith('Index prices;60;EUR')) {
+      // Accept both 30-min and 60-min resolution
+      if (inRoiSection && (line.startsWith('Index prices;60;EUR') || line.startsWith('Index prices;30;EUR'))) {
         foundEurPrices = true
         continue
       }
@@ -177,15 +178,30 @@ function parseSemoCsv(csvContent: string): number[] | null {
         continue
       }
       
-      // Parse prices line
+      // Parse prices line - semicolon separated, comma as decimal separator
       if (inRoiSection && foundEurPrices && line.includes(';') && !line.includes('T')) {
-        const priceStrings = line.split(';').filter(s => s.trim() && !isNaN(parseFloat(s.replace(',', '.'))))
+        // Split by semicolon and process each value
+        const parts = line.split(';')
+        const prices: number[] = []
         
-        if (priceStrings.length >= 20) {
-          const prices = priceStrings.map(p => parseFloat(p.replace(',', '.')))
-          if (prices.every(p => !isNaN(p) && p >= 0)) {
-            return prices
+        for (const part of parts) {
+          const trimmed = part.trim()
+          if (!trimmed) continue
+          
+          // Replace comma with dot for decimal parsing (European format: 33,24 -> 33.24)
+          const normalized = trimmed.replace(',', '.')
+          const value = parseFloat(normalized)
+          
+          // Validate: price should be positive and reasonable (0-1000 EUR/MWh)
+          if (!isNaN(value) && value >= 0 && value < 1000) {
+            prices.push(value)
           }
+        }
+        
+        // Need at least 20 valid prices (for 24 hours or 48 half-hours)
+        if (prices.length >= 20) {
+          console.log("[v0] Parsed SEMO prices, first 3:", prices.slice(0, 3))
+          return prices
         }
       }
     }
