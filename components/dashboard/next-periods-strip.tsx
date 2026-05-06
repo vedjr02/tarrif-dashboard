@@ -80,15 +80,11 @@ export function NextPeriodsStrip({ periods, tariffPeriods, currentPeriodIndex }:
                 
                 <span className="text-[10px] text-muted-foreground">€/MWh</span>
 
-                {/* Customer tariff in €/kWh */}
-                {tariffPeriod && (
-                  <>
-                    <span className="mt-2 text-xs font-medium tabular-nums text-foreground">
-                      {tariffPeriod.tariff_inc_vat_eur_kwh.toFixed(4)}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground opacity-70">€/kWh</span>
-                  </>
-                )}
+                {/* Wholesale price in €/kWh */}
+                <span className="mt-2 text-xs font-medium tabular-nums text-foreground">
+                  {(period.price_eur_mwh / 1000).toFixed(4)}
+                </span>
+                <span className="text-[10px] text-muted-foreground opacity-70">€/kWh</span>
                 
                 <div
                   className="mt-2 h-2 w-2 rounded-full"

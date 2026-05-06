@@ -77,9 +77,10 @@ export function ScreenPriceCurve({
   const { prices: selectedPrices, tariffs: selectedTariffs } = getSelectedData()
 
   const chartData = selectedPrices.periods.map((period, idx) => {
-    const tariff = selectedTariffs?.periods[idx]
     const date = new Date(period.start_time_dublin)
     const irishTariff = getIrishTariffForPeriod(idx)
+    // Use wholesale price directly (EUR/MWh)
+    const wholesalePrice = period.price_eur_mwh
     return {
       time: date.toLocaleTimeString("en-IE", {
         hour: "2-digit",
@@ -87,11 +88,11 @@ export function ScreenPriceCurve({
         hour12: false,
         timeZone: "Europe/Dublin",
       }),
-      dynamicPrice: tariff ? tariff.tariff_inc_vat_eur_kwh * 1000 : period.price_eur_mwh,
-      irishTariff: irishTariff * 1000,
+      dynamicPrice: wholesalePrice, // EUR/MWh
+      irishTariff: irishTariff * 1000, // Convert to EUR/MWh for comparison
       quintile: period.quintile,
       source: period.source,
-      tariff_inc_vat: tariff?.tariff_inc_vat_eur_kwh,
+      wholesaleKwh: wholesalePrice / 1000, // EUR/kWh
       irishTariffKwh: irishTariff,
     }
   })
@@ -138,7 +139,7 @@ export function ScreenPriceCurve({
           <CardContent className="flex flex-col gap-0.5 p-2 sm:p-3 lg:p-4">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-5 rounded bg-primary sm:h-3 sm:w-6" />
-              <span className="text-xs font-medium text-foreground sm:text-sm">ADFLEX Dynamic</span>
+              <span className="text-xs font-medium text-foreground sm:text-sm">SEM Wholesale</span>
             </div>
             <span className="text-sm font-bold text-primary sm:text-base lg:text-xl">
               €{(totalDynamicCost / 1000).toFixed(4)}/kWh
@@ -202,9 +203,9 @@ export function ScreenPriceCurve({
                         <p className="text-sm font-bold text-foreground">{data.time}</p>
                         <div className="mt-1 space-y-1">
                           <div className="flex items-center justify-between gap-6">
-                            <span className="text-xs text-primary">Dynamic:</span>
+                            <span className="text-xs text-primary">Wholesale:</span>
                             <span className="text-xs font-bold text-primary">
-                              €{(data.tariff_inc_vat ?? data.dynamicPrice / 1000).toFixed(4)}/kWh
+                              €{data.wholesaleKwh.toFixed(4)}/kWh
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-6">

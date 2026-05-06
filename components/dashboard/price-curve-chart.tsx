@@ -25,9 +25,7 @@ interface PriceCurveChartProps {
 }
 
 type DayView = "today" | "tomorrow" | "yesterday"
-type PriceMode = "wholesale" | "customer"
 
-const FLAT_RATE_EUR_KWH = 0.2638
 
 export function PriceCurveChart({
   todayPrices,
@@ -37,7 +35,6 @@ export function PriceCurveChart({
   currentPeriodIndex,
 }: PriceCurveChartProps) {
   const [dayView, setDayView] = useState<DayView>("today")
-  const [priceMode, setPriceMode] = useState<PriceMode>("wholesale")
 
   const getSelectedPrices = () => {
     switch (dayView) {
@@ -51,10 +48,8 @@ export function PriceCurveChart({
   }
 
   const selectedPrices = getSelectedPrices()
-  const selectedTariffs = dayView === "today" ? todayTariffs : undefined
 
-  const chartData = selectedPrices.periods.map((period, idx) => {
-    const tariff = selectedTariffs?.periods[idx]
+  const chartData = selectedPrices.periods.map((period) => {
     const date = new Date(period.start_time_dublin)
     return {
       time: date.toLocaleTimeString("en-IE", {
@@ -64,25 +59,18 @@ export function PriceCurveChart({
         timeZone: "Europe/Dublin",
       }),
       wholesale: period.price_eur_mwh,
-      customer: tariff ? tariff.tariff_inc_vat_eur_kwh * 1000 : undefined, // Scale to MWh equivalent for y-axis
+      wholesaleKwh: period.price_eur_mwh / 1000,
       quintile: period.quintile,
       source: period.source,
       period: period.period,
-      tariff_inc_vat: tariff?.tariff_inc_vat_eur_kwh,
     }
   })
 
-  const isCustomerMode = priceMode === "customer" && selectedTariffs
-
-  const dataKey = isCustomerMode ? "customer" : "wholesale"
-  const showData = chartData.filter(d => d[dataKey as keyof typeof chartData] !== undefined)
-
-  const minPrice = Math.min(...showData.map((d) => d[dataKey as keyof typeof chartData] as number))
-  const maxPrice = Math.max(...showData.map((d) => d[dataKey as keyof typeof chartData] as number))
+  const minPrice = Math.min(...chartData.map((d) => d.wholesale))
+  const maxPrice = Math.max(...chartData.map((d) => d.wholesale))
   const padding = (maxPrice - minPrice) * 0.1
 
   const currentTimeStr = dayView === "today" ? chartData[currentPeriodIndex]?.time : null
-  const flatRateY = isCustomerMode ? FLAT_RATE_EUR_KWH * 1000 : 0
 
   return (
     <Card>
@@ -91,28 +79,7 @@ export function PriceCurveChart({
           <LineChart className="h-4 w-4 text-primary" />
           Price Curve — 48 Periods
         </CardTitle>
-        <div className="flex gap-2">
-          {selectedTariffs && (
-            <div className="flex gap-1 border border-border rounded-lg p-1">
-              <Button
-                variant={priceMode === "wholesale" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setPriceMode("wholesale")}
-                className="h-7 text-xs"
-              >
-                Wholesale €/MWh
-              </Button>
-              <Button
-                variant={priceMode === "customer" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setPriceMode("customer")}
-                className="h-7 text-xs"
-              >
-                Customer €/kWh
-              </Button>
-            </div>
-          )}
-          <div className="flex gap-1">
+        <div className="flex gap-1">
             <Button
               variant={dayView === "yesterday" ? "default" : "outline"}
               size="sm"
@@ -138,7 +105,6 @@ export function PriceCurveChart({
             >
               Tomorrow
             </Button>
-          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -163,8 +129,8 @@ export function PriceCurveChart({
                 tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                 axisLine={{ stroke: "var(--border)" }}
                 tickLine={false}
-                tickFormatter={(value) => isCustomerMode ? `€${(value / 1000).toFixed(3)}` : `€${value.toFixed(0)}`}
-                width={isCustomerMode ? 60 : 50}
+                tickFormatter={(value) => `€${value.toFixed(0)}`}
+                width={50}
               />
               <Tooltip
                 content={({ active, payload }) => {
@@ -173,15 +139,12 @@ export function PriceCurveChart({
                   return (
                     <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
                       <p className="text-sm font-medium text-foreground">{data.time}</p>
-                      {isCustomerMode && data.tariff_inc_vat ? (
-                        <p className="text-lg font-bold text-foreground">
-                          €{data.tariff_inc_vat.toFixed(4)}/kWh
-                        </p>
-                      ) : (
-                        <p className="text-lg font-bold text-foreground">
-                          €{data.wholesale.toFixed(2)}/MWh
-                        </p>
-                      )}
+                      <p className="text-lg font-bold text-foreground">
+                        €{data.wholesale.toFixed(2)}/MWh
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        €{data.wholesaleKwh.toFixed(4)}/kWh
+                      </p>
                       <div className="mt-1 flex items-center gap-2">
                         <span
                           className="h-2 w-2 rounded-full"
@@ -210,24 +173,9 @@ export function PriceCurveChart({
                   }}
                 />
               )}
-              {isCustomerMode && flatRateY > 0 && (
-                <ReferenceLine
-                  y={flatRateY}
-                  stroke="var(--muted-foreground)"
-                  strokeWidth={1}
-                  strokeDasharray="4 4"
-                  label={{
-                    value: "Fixed plan",
-                    position: "right",
-                    fill: "var(--muted-foreground)",
-                    fontSize: 10,
-                    offset: 10,
-                  }}
-                />
-              )}
               <Area
                 type="monotone"
-                dataKey={dataKey}
+                dataKey="wholesale"
                 stroke="var(--primary)"
                 strokeWidth={2}
                 fill="url(#priceGradient)"

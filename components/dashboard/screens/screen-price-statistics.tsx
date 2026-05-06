@@ -16,8 +16,6 @@ interface ScreenPriceStatisticsProps {
   currentPeriodIndex: number
 }
 
-const FLAT_RATE_EUR_KWH = 0.2638
-
 export function ScreenPriceStatistics({ 
   currentPrice, 
   currentTariff, 
@@ -55,10 +53,6 @@ export function ScreenPriceStatistics({
         ? "down"
         : "same"
     : "same"
-
-  const savingVsFlat = currentTariff
-    ? FLAT_RATE_EUR_KWH - currentTariff.tariff_inc_vat_eur_kwh
-    : 0
 
   const nextPeriods = dayPrices.periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
   const nextTariffPeriods = dayTariffs?.periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
@@ -184,21 +178,15 @@ export function ScreenPriceStatistics({
                 </div>
               </div>
 
-              {currentTariff && (
-                <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:gap-5 sm:px-6">
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-accent sm:h-6 sm:w-6" />
-                    <span className="text-2xl font-bold text-foreground sm:text-3xl">
-                      {currentTariff.tariff_inc_vat_eur_kwh.toFixed(4)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">€/kWh</span>
-                  </div>
-                  <div className="hidden h-8 w-px bg-border sm:block" />
-                  <span className={`text-sm font-semibold sm:text-base lg:text-lg ${savingVsFlat > 0 ? "text-primary" : "text-destructive"}`}>
-                    {savingVsFlat > 0 ? `Save ${savingVsFlat.toFixed(4)} €/kWh` : `+${Math.abs(savingVsFlat).toFixed(4)} €/kWh`}
+              <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:gap-5 sm:px-6">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-accent sm:h-6 sm:w-6" />
+                  <span className="text-2xl font-bold text-foreground sm:text-3xl">
+                    {(currentPrice.price_eur_mwh / 1000).toFixed(4)}
                   </span>
+                  <span className="text-sm text-muted-foreground">€/kWh</span>
                 </div>
-              )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -255,14 +243,12 @@ export function ScreenPriceStatistics({
                     {Math.abs(period.price_eur_mwh).toFixed(0)}
                   </span>
                   <span className="text-xs text-muted-foreground">€/MWh</span>
-                  {tariffPeriod && (
-                    <div className="mt-1 text-center">
-                      <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">
-                        {tariffPeriod.tariff_inc_vat_eur_kwh.toFixed(3)}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">€/kWh</span>
-                    </div>
-                  )}
+                  <div className="mt-1 text-center">
+                    <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">
+                      {(period.price_eur_mwh / 1000).toFixed(4)}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">€/kWh</span>
+                  </div>
                   <div
                     className="mt-1.5 h-2 w-2 rounded-full sm:h-3 sm:w-3"
                     style={{ backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile) }}
