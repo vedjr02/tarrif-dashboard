@@ -7,7 +7,7 @@ import { Footer } from "./footer"
 import { SettingsModal } from "./settings-modal"
 import { ScreenPriceStatistics } from "./screens/screen-price-statistics"
 import { ScreenPriceAnalysis } from "./screens/screen-price-analysis"
-import { ScreenOperationsSavings } from "./screens/screen-operations-savings"
+import { ScreenGridForecast } from "./screens/screen-grid-forecast"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
 
 interface PricesApiResponse {
@@ -32,7 +32,7 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 const SCREENS = [
   { id: "price-stats", label: "Dynamic Price & Statistics" },
   { id: "price-analysis", label: "Price Analysis" },
-  { id: "operations", label: "Operations & Savings" },
+  { id: "grid-forecast", label: "Grid & Forecast" },
 ]
 
 const DEFAULT_ROTATION_INTERVAL = 15000 // 15 seconds
@@ -222,11 +222,7 @@ export function Dashboard() {
             />
           )}
           {currentScreen === 2 && (
-            <ScreenOperationsSavings
-              currentPrice={currentPrice}
-              currentTariff={currentTariff}
-              dayPrices={todayPrices}
-              dayTariffs={todayTariffs}
+            <ScreenGridForecast
               currentPeriodIndex={currentPeriodIndex}
             />
           )}

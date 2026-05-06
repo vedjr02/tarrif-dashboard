@@ -95,3 +95,11 @@ export function getSignalText(quintile: Quintile): string {
   }
   return signals[quintile]
 }
+
+// Returns color based on actual price value - negative prices get special bright green
+export function getPriceColor(priceEurMwh: number, quintile: Quintile): string {
+  if (priceEurMwh < 0) {
+    return "var(--q0-negative)"
+  }
+  return getQuintileColor(quintile)
+}

@@ -32,6 +32,7 @@
   --radius: 0.625rem;
   
   /* Custom pricing quintile colors */
+  --q0-negative: oklch(0.72 0.2 145);
   --q1-cheap: oklch(0.58 0.14 168);
   --q2-below: oklch(0.65 0.12 168);
   --q3-average: oklch(0.55 0.02 220);
@@ -77,6 +78,7 @@
   --ring: oklch(0.62 0.15 168);
   
   /* Custom pricing quintile colors - dark mode */
+  --q0-negative: oklch(0.75 0.2 145);
   --q1-cheap: oklch(0.62 0.15 168);
   --q2-below: oklch(0.55 0.12 168);
   --q3-average: oklch(0.55 0.02 220);
@@ -127,6 +129,7 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-q0-negative: var(--q0-negative);
   --color-q1-cheap: var(--q1-cheap);
   --color-q2-below: var(--q2-below);
   --color-q3-average: var(--q3-average);
