@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Area,
   AreaChart,
   ResponsiveContainer,
@@ -279,88 +285,118 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
       </Card>
 
       {/* Status Cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
-        {/* Current Wind Speed */}
-        <Card className="border-l-4" style={{ borderLeftColor: "var(--q1-cheap)" }}>
-          <CardContent className="p-2 sm:p-3 lg:p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Wind className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Wind Speed</span>
-            </div>
-            <div className="text-lg font-bold sm:text-xl lg:text-2xl">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : currentWindData ? (
-                `${Math.round(currentWindData.windSpeed)} km/h`
-              ) : (
-                "--"
-              )}
-            </div>
-            {currentWindData && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {getWindDirection(currentWindData.windDirection)}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <TooltipProvider>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
+          {/* Current Wind Speed */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "var(--q1-cheap)" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Wind className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Wind Speed</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : currentWindData ? (
+                      `${Math.round(currentWindData.windSpeed)} km/h`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                  {currentWindData && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {getWindDirection(currentWindData.windDirection)}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Current wind speed in Dublin. Higher wind speeds typically mean more renewable energy in the grid and lower prices.</p>
+            </TooltipContent>
+          </UITooltip>
 
-        {/* Wind Gusts */}
-        <Card className="border-l-4" style={{ borderLeftColor: "var(--q2-below)" }}>
-          <CardContent className="p-2 sm:p-3 lg:p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Gauge className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Gusts</span>
-            </div>
-            <div className="text-lg font-bold sm:text-xl lg:text-2xl">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : currentWindData ? (
-                `${Math.round(currentWindData.windGusts)} km/h`
-              ) : (
-                "--"
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Wind Gusts */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "var(--q2-below)" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Gauge className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Gusts</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : currentWindData ? (
+                      `${Math.round(currentWindData.windGusts)} km/h`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Maximum wind gusts. Strong gusts can cause turbines to shut down for safety, potentially reducing wind generation.</p>
+            </TooltipContent>
+          </UITooltip>
 
-        {/* Grid Frequency */}
-        <Card className="border-l-4" style={{ borderLeftColor: "var(--q4-above)" }}>
-          <CardContent className="p-2 sm:p-3 lg:p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Activity className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Frequency</span>
-            </div>
-            <div className="text-lg font-bold sm:text-xl lg:text-2xl">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : displayGridStatus?.frequency != null ? (
-                `${displayGridStatus.frequency.toFixed(2)} Hz`
-              ) : (
-                "--"
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Grid Frequency */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "var(--q4-above)" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Activity className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Frequency</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : displayGridStatus?.frequency != null ? (
+                      `${displayGridStatus.frequency.toFixed(2)} Hz`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Grid frequency must stay at 50 Hz. Values above 50 Hz mean excess generation, below 50 Hz means high demand. From EirGrid.</p>
+            </TooltipContent>
+          </UITooltip>
 
-        {/* Grid Demand */}
-        <Card className="border-l-4" style={{ borderLeftColor: "var(--q3-average)" }}>
-          <CardContent className="p-2 sm:p-3 lg:p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Zap className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Demand</span>
-            </div>
-            <div className="text-lg font-bold sm:text-xl lg:text-2xl">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : displayGridStatus?.demand != null ? (
-                `${Math.round(displayGridStatus.demand)} MW`
-              ) : (
-                "--"
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Grid Demand */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "var(--q3-average)" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Zap className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Demand</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : displayGridStatus?.demand != null ? (
+                      `${Math.round(displayGridStatus.demand)} MW`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Total electricity demand in Ireland. High demand typically means higher prices. From EirGrid Smart Grid Dashboard.</p>
+            </TooltipContent>
+          </UITooltip>
+        </div>
+      </TooltipProvider>
 
       {/* Wind Speed Forecast Chart */}
       <Card className="flex-1 min-h-0 flex flex-col">
