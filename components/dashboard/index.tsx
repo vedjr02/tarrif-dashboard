@@ -133,9 +133,8 @@ export function Dashboard() {
 
   const goToScreen = (index: number) => {
     setCurrentScreen(index)
-    // Pause auto-rotation briefly when manually navigating
+    // Stop auto-rotation when manually navigating (user must re-enable via header button)
     setIsAutoRotating(false)
-    setTimeout(() => setIsAutoRotating(true), 5000)
   }
 
   const nextScreen = () => goToScreen((currentScreen + 1) % SCREENS.length)
