@@ -90,34 +90,31 @@ export async function GET() {
         }),
       ])
       
-      const parseResponse = async (res: Response): Promise<EirGridDataPoint[]> => {
-        if (!res.ok) return []
+      // Parse and get the LAST value from the response (most recent)
+      const getLatestFromResponse = async (res: Response): Promise<number | null> => {
+        if (!res.ok) return null
         try {
           const data = await res.json()
-          return Array.isArray(data?.Rows) ? data.Rows : []
+          const rows = Array.isArray(data?.Rows) ? data.Rows : []
+          if (rows.length === 0) return null
+          // Rows are typically ordered chronologically, last = most recent
+          const lastRow = rows[rows.length - 1]
+          return typeof lastRow?.Value === 'number' ? lastRow.Value : null
         } catch {
-          return []
+          return null
         }
       }
       
-      const [frequency, co2, demand] = await Promise.all([
-        parseResponse(frequencyRes),
-        parseResponse(co2Res),
-        parseResponse(demandRes),
+      const [frequencyVal, co2Val, demandVal] = await Promise.all([
+        getLatestFromResponse(frequencyRes),
+        getLatestFromResponse(co2Res),
+        getLatestFromResponse(demandRes),
       ])
       
-      const getLatestValue = (data: EirGridDataPoint[]): number | null => {
-        if (data.length === 0) return null
-        const sorted = [...data].sort((a, b) => 
-          new Date(b.EffectiveTime).getTime() - new Date(a.EffectiveTime).getTime()
-        )
-        return sorted[0]?.Value ?? null
-      }
-      
       gridStatus = {
-        frequency: getLatestValue(frequency),
-        co2Intensity: getLatestValue(co2),
-        demand: getLatestValue(demand),
+        frequency: frequencyVal,
+        co2Intensity: co2Val,
+        demand: demandVal,
       }
       
       gridError = !Object.values(gridStatus).some(v => v !== null)

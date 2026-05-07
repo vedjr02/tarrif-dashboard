@@ -312,8 +312,8 @@ export function ScreenPriceAnalysis({
         <CardHeader className="pb-2">
           <CardTitle className="text-base sm:text-lg">SEM Wholesale vs Retail Tariffs</CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 p-2 sm:p-4">
-          <div className="w-full h-full min-h-[300px]">
+        <CardContent className="p-2 sm:p-4">
+          <div className="w-full" style={{ height: '400px' }}>
             {mounted && chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
