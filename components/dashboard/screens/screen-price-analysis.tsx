@@ -57,14 +57,17 @@ export function ScreenPriceAnalysis({
       setTariffLoading(true)
       try {
         const { tariffs, dataAvailable, warning } = await getRetailTariffs()
+        console.log("[v0] Loaded tariffs:", tariffs.length, tariffs.map(t => `${t.supplier}-${t.planName}`))
         setRetailTariffs(tariffs)
         // Auto-select first 4 tariffs by default (mix of flat and ToU)
-        setSelectedTariffs(new Set(tariffs.slice(0, 4).map(t => `${t.supplier}-${t.planName}`)))
+        const selected = tariffs.slice(0, 4).map(t => `${t.supplier}-${t.planName}`)
+        console.log("[v0] Selected tariffs:", selected)
+        setSelectedTariffs(new Set(selected))
         if (!dataAvailable && warning) {
           setTariffError(warning)
         }
       } catch (error) {
-        console.error("[ScreenPriceAnalysis] Error fetching tariffs:", error)
+        console.error("[v0] Error fetching tariffs:", error)
         setTariffError("Failed to load retail tariff data")
       } finally {
         setTariffLoading(false)
