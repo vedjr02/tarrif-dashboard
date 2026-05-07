@@ -22,6 +22,14 @@ interface WindDataPoint {
   windGusts: number // km/h
 }
 
+interface WeatherData {
+  temperature: number // °C
+  humidity: number // %
+  precipitation: number // mm
+  cloudCover: number // %
+  weatherCode: number // WMO weather code
+}
+
 interface GridStatus {
   frequency: number | null
   co2Intensity: number | null
@@ -30,13 +38,14 @@ interface GridStatus {
 
 export async function GET() {
   try {
-    // Fetch wind forecast from Open-Meteo (always works)
+    // Fetch wind forecast and weather from Open-Meteo (always works)
     const windForecastRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${DUBLIN_LAT}&longitude=${DUBLIN_LON}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=Europe%2FDublin&forecast_days=2&past_days=1`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${DUBLIN_LAT}&longitude=${DUBLIN_LON}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,relative_humidity_2m,precipitation,cloud_cover,weather_code&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,weather_code&timezone=Europe%2FDublin&forecast_days=2&past_days=1`,
       { next: { revalidate: 1800 } } // Cache for 30 minutes
     )
     
     let windData: WindDataPoint[] = []
+    let currentWeather: WeatherData | null = null
     let windError = false
     
     if (windForecastRes.ok) {
@@ -53,6 +62,17 @@ export async function GET() {
           windDirection: directions[i] ?? 0,
           windGusts: gusts[i] ?? 0,
         }))
+        
+        // Parse current weather
+        if (windJson.current) {
+          currentWeather = {
+            temperature: windJson.current.temperature_2m ?? 0,
+            humidity: windJson.current.relative_humidity_2m ?? 0,
+            precipitation: windJson.current.precipitation ?? 0,
+            cloudCover: windJson.current.cloud_cover ?? 0,
+            weatherCode: windJson.current.weather_code ?? 0,
+          }
+        }
       } catch {
         windError = true
       }
@@ -90,25 +110,29 @@ export async function GET() {
         }),
       ])
       
-      // Parse and get the LAST value from the response (most recent)
-      const getLatestFromResponse = async (res: Response): Promise<number | null> => {
+      // Parse and get the LAST non-null value from the response (most recent with actual data)
+      const getLatestFromResponse = async (res: Response, fieldName: string): Promise<number | null> => {
         if (!res.ok) return null
         try {
           const data = await res.json()
           const rows = Array.isArray(data?.Rows) ? data.Rows : []
           if (rows.length === 0) return null
-          // Rows are typically ordered chronologically, last = most recent
-          const lastRow = rows[rows.length - 1]
-          return typeof lastRow?.Value === 'number' ? lastRow.Value : null
+          // Find the last row with a non-null Value (future times have null values)
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (typeof rows[i]?.Value === 'number') {
+              return rows[i].Value
+            }
+          }
+          return null
         } catch {
           return null
         }
       }
       
       const [frequencyVal, co2Val, demandVal] = await Promise.all([
-        getLatestFromResponse(frequencyRes),
-        getLatestFromResponse(co2Res),
-        getLatestFromResponse(demandRes),
+        getLatestFromResponse(frequencyRes, 'frequency'),
+        getLatestFromResponse(co2Res, 'co2'),
+        getLatestFromResponse(demandRes, 'demand'),
       ])
       
       gridStatus = {
@@ -125,9 +149,11 @@ export async function GET() {
     return NextResponse.json({
       windData,
       gridStatus,
+      currentWeather,
       fetchedAt: new Date().toISOString(),
       hasWindData: windData.length > 0,
       hasGridData: !gridError,
+      hasWeatherData: currentWeather !== null,
       windError,
       gridError,
     })
