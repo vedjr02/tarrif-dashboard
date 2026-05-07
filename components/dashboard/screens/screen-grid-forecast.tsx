@@ -179,15 +179,16 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
     })
   }, [displayWindData])
 
-  // Get current time string for reference line (must match chartData format: HH:MM)
+  // Get current time string for reference line (rounded to hour to match Open-Meteo hourly data)
   const currentTimeStr = useMemo(() => {
     const now = new Date()
-    return now.toLocaleTimeString("en-IE", {
+    const hour = now.toLocaleTimeString("en-IE", {
       hour: "2-digit",
-      minute: "2-digit",
       hour12: false,
       timeZone: "Europe/Dublin",
     })
+    // Open-Meteo data is hourly, so format as "HH:00" to match chartData
+    return `${hour}:00`
   }, [])
   
   // Format last data time for display
