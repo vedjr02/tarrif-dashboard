@@ -18,7 +18,7 @@ import {
   YAxis,
   ReferenceLine,
 } from "recharts"
-import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge } from "lucide-react"
+import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge, Thermometer, Droplets, Cloud } from "lucide-react"
 
 interface WindDataPoint {
   timestamp: string
@@ -33,12 +33,22 @@ interface GridStatus {
   demand: number | null
 }
 
+interface WeatherData {
+  temperature: number
+  humidity: number
+  precipitation: number
+  cloudCover: number
+  weatherCode: number
+}
+
 interface ApiResponse {
   windData: WindDataPoint[]
   gridStatus: GridStatus
+  currentWeather: WeatherData | null
   fetchedAt: string
   hasWindData: boolean
   hasGridData: boolean
+  hasWeatherData?: boolean
   windError?: boolean
   gridError?: boolean
 }
@@ -284,9 +294,9 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         </CardContent>
       </Card>
 
-      {/* Status Cards */}
+      {/* Status Cards - Grid & Weather */}
       <TooltipProvider>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 sm:gap-3 lg:gap-4">
           {/* Current Wind Speed */}
           <UITooltip>
             <TooltipTrigger asChild>
@@ -393,6 +403,84 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-[200px]">
               <p className="text-xs">Total electricity demand in Ireland. High demand typically means higher prices. From EirGrid Smart Grid Dashboard.</p>
+            </TooltipContent>
+          </UITooltip>
+
+          {/* Temperature */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "#f97316" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Thermometer className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Temp</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : data?.currentWeather ? (
+                      `${Math.round(data.currentWeather.temperature)}°C`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Current temperature in Dublin. Cold weather increases heating demand, warm weather may increase cooling demand.</p>
+            </TooltipContent>
+          </UITooltip>
+
+          {/* Humidity */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "#3b82f6" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Droplets className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Humidity</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : data?.currentWeather ? (
+                      `${Math.round(data.currentWeather.humidity)}%`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Current relative humidity in Dublin.</p>
+            </TooltipContent>
+          </UITooltip>
+
+          {/* Cloud Cover */}
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <Card className="border-l-4 cursor-help" style={{ borderLeftColor: "#94a3b8" }}>
+                <CardContent className="p-2 sm:p-3 lg:p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Cloud className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm">Clouds</span>
+                  </div>
+                  <div className="text-lg font-bold sm:text-xl lg:text-2xl">
+                    {isLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : data?.currentWeather ? (
+                      `${Math.round(data.currentWeather.cloudCover)}%`
+                    ) : (
+                      "--"
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              <p className="text-xs">Cloud cover affects solar energy generation. Lower cloud cover means more solar power potential.</p>
             </TooltipContent>
           </UITooltip>
         </div>
