@@ -573,6 +573,13 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     stroke="var(--foreground)"
                     strokeWidth={2}
                     strokeDasharray="6 3"
+                    label={{
+                      value: "NOW",
+                      position: "top",
+                      fill: "var(--foreground)",
+                      fontSize: 11,
+                      fontWeight: "bold",
+                    }}
                   />
 
                   {/* Wind gusts - background area */}
