@@ -3,8 +3,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -16,25 +14,26 @@ import {
 import {
   ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  CartesianGrid,
 } from "recharts"
 import { ChevronDown, Loader2 } from "lucide-react"
 import type { DayPrices, DayTariffs, Quintile } from "@/lib/types"
 import { getPriceColor } from "@/lib/types"
+import { 
+  RETAIL_TARIFFS, 
+  getTariffRateForHour, 
+  getTariffColor, 
+  SUPPLIER_COLORS,
+  type RetailTariff 
+} from "@/lib/retailTariffs"
 
 type DayView = "today" | "tomorrow" | "yesterday"
-
-// Retail tariffs from CRU data (c/kWh, VAT inclusive) - exact values from user spec
-const RETAIL_TARIFFS = [
-  { id: "energia", name: "Energia Standard", unitRate: 24.88, standingCharge: 56.15, color: "#ef4444" },
-  { id: "bordgais", name: "Bord Gáis Standard", unitRate: 25.12, standingCharge: 54.00, color: "#f97316" },
-  { id: "electricireland", name: "Electric Ireland Standard", unitRate: 26.40, standingCharge: 55.00, color: "#3b82f6" },
-  { id: "sse", name: "SSE Airtricity Standard", unitRate: 25.60, standingCharge: 52.00, color: "#8b5cf6" },
-]
 
 interface ScreenPriceAnalysisProps {
   todayPrices: DayPrices
@@ -54,13 +53,12 @@ export function ScreenPriceAnalysis({
 }: ScreenPriceAnalysisProps) {
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
-  const [renewMargin, setRenewMargin] = useState(2.0) // c/kWh margin, editable
-  const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(
-    new Set(RETAIL_TARIFFS.map(t => t.id)) // All selected by default
-  )
+  const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setMounted(true)
+    // Select all tariffs by default
+    setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
   }, [])
 
   const getSelectedPrices = () => {
@@ -71,60 +69,86 @@ export function ScreenPriceAnalysis({
 
   const selectedPrices = getSelectedPrices()
 
+  // Group tariffs by supplier for dropdown
+  const tariffsBySupplier = useMemo(() => {
+    const grouped: Record<string, RetailTariff[]> = {}
+    RETAIL_TARIFFS.forEach((tariff) => {
+      if (!grouped[tariff.supplier]) {
+        grouped[tariff.supplier] = []
+      }
+      grouped[tariff.supplier].push(tariff)
+    })
+    return grouped
+  }, [])
+
   // Chart data: all values in c/kWh
-  // Renew formula: (SEM EUR/MWh / 10) + margin = c/kWh
+  // SEM wholesale = EUR/MWh / 10 = c/kWh
   const chartData = useMemo(() => {
     if (!selectedPrices?.periods) return []
     
     return selectedPrices.periods.map((period, idx) => {
       const date = new Date(period.start_time_dublin)
+      const hour = date.getHours()
       const semPriceEurMwh = period.price_eur_mwh
       
-      // Renew price formula: (SEM EUR/MWh / 10) + margin = c/kWh
-      const renewPriceCents = (semPriceEurMwh / 10) + renewMargin
+      // SEM wholesale in c/kWh
+      const semPriceCents = semPriceEurMwh / 10
       
       const dataPoint: Record<string, number | string> = {
         periodIdx: idx,
+        hour,
         time: date.toLocaleTimeString("en-IE", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
           timeZone: "Europe/Dublin",
         }),
-        semPrice: semPriceEurMwh,
-        renewPrice: renewPriceCents, // c/kWh
+        semPriceEurMwh,
+        semPrice: semPriceCents, // c/kWh
         quintile: period.quintile,
       }
 
-      // Add retail tariff prices (flat rates in c/kWh)
+      // Add all retail tariff rates based on hour (for ToU tariffs)
       RETAIL_TARIFFS.forEach((tariff) => {
-        dataPoint[`tariff_${tariff.id}`] = tariff.unitRate
+        dataPoint[`tariff_${tariff.id}`] = getTariffRateForHour(tariff, hour)
       })
 
       return dataPoint
     })
-  }, [selectedPrices, renewMargin])
+  }, [selectedPrices])
 
   // Calculate Y-axis domain (all values in c/kWh)
-  const allValues = chartData.flatMap((d) => {
-    const vals = [d.renewPrice as number]
-    RETAIL_TARIFFS.forEach((t) => {
-      if (selectedTariffs.has(t.id)) {
-        vals.push(d[`tariff_${t.id}`] as number)
-      }
+  const { minY, maxY } = useMemo(() => {
+    let min = Infinity
+    let max = -Infinity
+    
+    chartData.forEach((d) => {
+      const sem = d.semPrice as number
+      min = Math.min(min, sem)
+      max = Math.max(max, sem)
+      
+      RETAIL_TARIFFS.forEach((tariff) => {
+        if (selectedTariffs.has(tariff.id)) {
+          const val = d[`tariff_${tariff.id}`] as number
+          min = Math.min(min, val)
+          max = Math.max(max, val)
+        }
+      })
     })
-    return vals
-  })
-  const minY = Math.min(...allValues) || 0
-  const maxY = Math.max(...allValues) || 30
-  const padding = (maxY - minY) * 0.1
+    
+    const padding = (max - min) * 0.1
+    return { 
+      minY: Math.max(0, min - padding), 
+      maxY: max + padding 
+    }
+  }, [chartData, selectedTariffs])
 
-  // Average Renew price for the day
-  const avgRenewPrice = chartData.length > 0 
-    ? chartData.reduce((sum, d) => sum + (d.renewPrice as number), 0) / chartData.length 
+  // Average SEM price for the day
+  const avgSemPrice = chartData.length > 0 
+    ? chartData.reduce((sum, d) => sum + (d.semPrice as number), 0) / chartData.length 
     : 0
 
-  // Toggle tariff selection
+  // Toggle functions
   const toggleTariff = (id: string) => {
     const newSet = new Set(selectedTariffs)
     if (newSet.has(id)) {
@@ -132,6 +156,21 @@ export function ScreenPriceAnalysis({
     } else {
       newSet.add(id)
     }
+    setSelectedTariffs(newSet)
+  }
+
+  const toggleSupplier = (supplier: string) => {
+    const supplierTariffs = tariffsBySupplier[supplier] || []
+    const allSelected = supplierTariffs.every(t => selectedTariffs.has(t.id))
+    
+    const newSet = new Set(selectedTariffs)
+    supplierTariffs.forEach(t => {
+      if (allSelected) {
+        newSet.delete(t.id)
+      } else {
+        newSet.add(t.id)
+      }
+    })
     setSelectedTariffs(newSet)
   }
 
@@ -145,6 +184,17 @@ export function ScreenPriceAnalysis({
 
   const currentTimeStr = dayView === "today" ? chartData[currentPeriodIndex]?.time : null
 
+  // Get type label for tariff
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "flat": return "24hr"
+      case "daynight": return "Day/Night"
+      case "tou": return "ToU"
+      case "ev": return "EV"
+      default: return type
+    }
+  }
+
   return (
     <div className="flex h-full flex-col gap-3 sm:gap-4 p-3 sm:p-4 lg:p-6 overflow-auto">
       {/* Header with Day Selector */}
@@ -154,7 +204,7 @@ export function ScreenPriceAnalysis({
             Price Analysis
           </h2>
           <p className="text-xs text-muted-foreground sm:text-sm lg:text-base">
-            Renew dynamic tariff vs retail providers (c/kWh)
+            SEM wholesale vs Irish retail tariffs (c/kWh)
           </p>
         </div>
         <div className="flex gap-1 border border-border rounded-lg p-1">
@@ -187,118 +237,98 @@ export function ScreenPriceAnalysis({
         </div>
       </div>
 
-      {/* Controls: Renew Margin + Tariff Selector */}
-      <Card>
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            {/* Renew Margin Input */}
-            <div className="flex items-end gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="margin" className="text-xs text-muted-foreground">
-                  Renew margin (c/kWh)
-                </Label>
-                <Input
-                  id="margin"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="10"
-                  value={renewMargin}
-                  onChange={(e) => setRenewMargin(parseFloat(e.target.value) || 0)}
-                  className="h-8 w-24 text-sm"
-                />
-              </div>
-              <div className="text-xs text-muted-foreground pb-1.5">
-                Formula: (SEM €/MWh ÷ 10) + margin
-              </div>
-            </div>
-
-            {/* Tariff Multi-Select Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-2">
-                  <span>Retail Tariffs ({selectedTariffs.size}/{RETAIL_TARIFFS.length})</span>
-                  <ChevronDown className="h-4 w-4" />
+      {/* Controls: Tariff Selector + Stats */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Tariff Multi-Select Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-2">
+              <span>Retail Tariffs ({selectedTariffs.size}/{RETAIL_TARIFFS.length})</span>
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-80 max-h-[70vh] overflow-y-auto">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              <span>Select tariffs to compare</span>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={selectAllTariffs} className="h-6 text-xs px-2">
+                  All
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Compare with retail tariffs</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="flex gap-2 px-2 py-1.5">
-                  <Button variant="ghost" size="sm" onClick={selectAllTariffs} className="h-6 text-xs flex-1">
-                    Select All
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={deselectAllTariffs} className="h-6 text-xs flex-1">
-                    Clear
-                  </Button>
-                </div>
-                <DropdownMenuSeparator />
-                {RETAIL_TARIFFS.map((tariff) => (
-                  <DropdownMenuCheckboxItem
-                    key={tariff.id}
-                    checked={selectedTariffs.has(tariff.id)}
-                    onCheckedChange={() => toggleTariff(tariff.id)}
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: tariff.color }}
-                      />
-                      <span className="flex-1">{tariff.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {tariff.unitRate} c/kWh
-                      </span>
-                    </div>
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
-        <Card className="bg-amber-500/10 border-amber-500">
-          <CardContent className="p-2 sm:p-3">
-            <div className="text-xs text-muted-foreground">Avg Renew ({dayView})</div>
-            <div className="text-lg font-bold text-amber-600 sm:text-xl">
-              {avgRenewPrice.toFixed(2)} c/kWh
-            </div>
-          </CardContent>
-        </Card>
-        {RETAIL_TARIFFS.map((tariff) => (
-          <Card 
-            key={tariff.id} 
-            className="border"
-            style={{ borderColor: selectedTariffs.has(tariff.id) ? tariff.color : undefined }}
-          >
-            <CardContent className="p-2 sm:p-3">
-              <div className="text-xs text-muted-foreground truncate">{tariff.name}</div>
-              <div 
-                className="text-lg font-bold sm:text-xl" 
-                style={{ color: selectedTariffs.has(tariff.id) ? tariff.color : 'var(--muted-foreground)' }}
-              >
-                {tariff.unitRate} c/kWh
+                <Button variant="ghost" size="sm" onClick={deselectAllTariffs} className="h-6 text-xs px-2">
+                  None
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            
+            {Object.entries(tariffsBySupplier).map(([supplier, tariffs]) => {
+              const allSelected = tariffs.every(t => selectedTariffs.has(t.id))
+              
+              return (
+                <div key={supplier}>
+                  <DropdownMenuCheckboxItem
+                    checked={allSelected}
+                    onCheckedChange={() => toggleSupplier(supplier)}
+                    className="font-semibold"
+                  >
+                    <span 
+                      className="mr-2 h-3 w-3 rounded-full inline-block"
+                      style={{ backgroundColor: SUPPLIER_COLORS[supplier] }}
+                    />
+                    {supplier}
+                  </DropdownMenuCheckboxItem>
+                  
+                  {tariffs.map((tariff, idx) => (
+                    <DropdownMenuCheckboxItem
+                      key={tariff.id}
+                      checked={selectedTariffs.has(tariff.id)}
+                      onCheckedChange={() => toggleTariff(tariff.id)}
+                      className="pl-8 text-sm"
+                    >
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="truncate">{tariff.planName}</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          {getTypeLabel(tariff.type)}
+                        </span>
+                      </div>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </div>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Average SEM price */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+          <span className="text-xs text-muted-foreground">Avg SEM ({dayView}):</span>
+          <span className="text-sm font-bold text-amber-600">{avgSemPrice.toFixed(2)} c/kWh</span>
+        </div>
       </div>
 
       {/* Chart */}
       <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base sm:text-lg">Renew vs Retail Tariffs (c/kWh)</CardTitle>
+          <CardTitle className="text-base sm:text-lg">SEM Wholesale vs Retail Tariffs</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 min-h-0 p-2 sm:p-4">
-          <div className="w-full h-full min-h-[250px]">
+          <div className="w-full h-full min-h-[300px]">
             {mounted && chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
                   margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                 >
+                  <defs>
+                    <linearGradient id="semGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+                  
                   <XAxis
                     dataKey="time"
                     tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
@@ -307,7 +337,7 @@ export function ScreenPriceAnalysis({
                     interval={5}
                   />
                   <YAxis
-                    domain={[Math.max(0, minY - padding), maxY + padding]}
+                    domain={[minY, maxY]}
                     tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
@@ -325,41 +355,48 @@ export function ScreenPriceAnalysis({
                       if (!active || !payload?.[0]) return null
                       const data = payload[0].payload
                       return (
-                        <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+                        <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg max-w-sm">
                           <p className="text-sm font-bold text-foreground">{data.time}</p>
                           <p className="text-xs text-muted-foreground mb-2">
-                            SEM: {(data.semPrice as number).toFixed(2)} €/MWh
+                            SEM: {(data.semPriceEurMwh as number).toFixed(2)} €/MWh
                           </p>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                            {/* SEM wholesale */}
                             <div className="flex items-center justify-between gap-4">
                               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
                                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                                Renew:
+                                SEM Wholesale:
                               </span>
                               <span className="text-xs font-bold text-amber-600">
-                                {(data.renewPrice as number).toFixed(2)} c/kWh
+                                {(data.semPrice as number).toFixed(2)} c/kWh
                               </span>
                             </div>
-                            {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff) => (
-                              <div key={tariff.id} className="flex items-center justify-between gap-4">
-                                <span 
-                                  className="flex items-center gap-1.5 text-xs"
-                                  style={{ color: tariff.color }}
-                                >
+                            
+                            {/* Selected retail tariffs */}
+                            {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, idx) => {
+                              const color = getTariffColor(tariff, idx)
+                              const rate = data[`tariff_${tariff.id}`] as number
+                              return (
+                                <div key={tariff.id} className="flex items-center justify-between gap-4">
                                   <span 
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ backgroundColor: tariff.color }}
-                                  />
-                                  {tariff.name}:
-                                </span>
-                                <span 
-                                  className="text-xs font-bold"
-                                  style={{ color: tariff.color }}
-                                >
-                                  {tariff.unitRate.toFixed(2)} c/kWh
-                                </span>
-                              </div>
-                            ))}
+                                    className="flex items-center gap-1.5 text-xs truncate"
+                                    style={{ color }}
+                                  >
+                                    <span 
+                                      className="h-2 w-2 rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: color }}
+                                    />
+                                    {tariff.supplier} {tariff.planName}:
+                                  </span>
+                                  <span 
+                                    className="text-xs font-bold flex-shrink-0"
+                                    style={{ color }}
+                                  >
+                                    {rate.toFixed(2)} c/kWh
+                                  </span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )
@@ -383,29 +420,34 @@ export function ScreenPriceAnalysis({
                     />
                   )}
 
-                  {/* Renew price line (dynamic, always shown, bold amber) */}
-                  <Line
-                    type="stepAfter"
-                    dataKey="renewPrice"
+                  {/* SEM wholesale price area (always shown) */}
+                  <Area
+                    type="monotone"
+                    dataKey="semPrice"
                     stroke="#f59e0b"
-                    strokeWidth={3}
+                    strokeWidth={2.5}
+                    fill="url(#semGradient)"
                     dot={false}
-                    name="Renew"
+                    name="SEM Wholesale"
                   />
 
-                  {/* Retail tariff lines (flat horizontal, user-selectable, dashed) */}
-                  {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff) => (
-                    <Line
-                      key={tariff.id}
-                      type="monotone"
-                      dataKey={`tariff_${tariff.id}`}
-                      stroke={tariff.color}
-                      strokeWidth={2}
-                      strokeDasharray="8 4"
-                      dot={false}
-                      name={tariff.name}
-                    />
-                  ))}
+                  {/* Retail tariff lines */}
+                  {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, idx) => {
+                    const color = getTariffColor(tariff, idx)
+                    const isFlat = tariff.type === "flat"
+                    return (
+                      <Line
+                        key={tariff.id}
+                        type={isFlat ? "monotone" : "stepAfter"}
+                        dataKey={`tariff_${tariff.id}`}
+                        stroke={color}
+                        strokeWidth={isFlat ? 1.5 : 2}
+                        strokeDasharray={isFlat ? "6 3" : undefined}
+                        dot={false}
+                        name={`${tariff.supplier} ${tariff.planName}`}
+                      />
+                    )
+                  })}
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (
@@ -418,23 +460,34 @@ export function ScreenPriceAnalysis({
       </Card>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs">
-        <div className="flex items-center gap-1.5">
-          <div className="h-1 w-6 bg-amber-500 rounded" />
-          <span className="text-muted-foreground">Renew (dynamic)</span>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30">
+          <div className="h-2 w-5 bg-amber-500 rounded" />
+          <span className="text-amber-600 font-medium">SEM Wholesale</span>
         </div>
-        {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff) => (
-          <div key={tariff.id} className="flex items-center gap-1.5">
-            <div 
-              className="h-0.5 w-6 rounded"
-              style={{ 
-                backgroundColor: tariff.color,
-                backgroundImage: `repeating-linear-gradient(90deg, ${tariff.color} 0px, ${tariff.color} 8px, transparent 8px, transparent 12px)`
-              }} 
-            />
-            <span className="text-muted-foreground">{tariff.name}</span>
-          </div>
-        ))}
+        
+        {/* Show supplier legend when many tariffs selected */}
+        {selectedTariffs.size > 0 && (
+          Object.entries(SUPPLIER_COLORS).map(([supplier, color]) => {
+            const hasSelected = RETAIL_TARIFFS.some(t => 
+              t.supplier === supplier && selectedTariffs.has(t.id)
+            )
+            if (!hasSelected) return null
+            return (
+              <div 
+                key={supplier}
+                className="flex items-center gap-1.5 px-2 py-1 rounded border"
+                style={{ borderColor: color, backgroundColor: `${color}15` }}
+              >
+                <div 
+                  className="h-2 w-5 rounded"
+                  style={{ backgroundColor: color }}
+                />
+                <span style={{ color }} className="font-medium">{supplier}</span>
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )
