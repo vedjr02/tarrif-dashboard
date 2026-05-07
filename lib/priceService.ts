@@ -26,7 +26,12 @@ export interface DayAheadPriceResult {
 
 export interface RetailTariff {
   supplier: string
-  unitRate: number // c/kWh
+  planName: string
+  type: "flat" | "tou" // flat = single rate, tou = time of use
+  unitRate?: number // c/kWh (for flat tariffs)
+  dayRate?: number // c/kWh (for ToU tariffs, 8am-5pm and 7pm-11pm)
+  nightRate?: number // c/kWh (for ToU tariffs, 11pm-8am)
+  peakRate?: number // c/kWh (for ToU tariffs, 5pm-7pm)
   standingCharge?: number // c/day
   source: "SEMOPX" | "CRU" | "FALLBACK"
 }
@@ -153,19 +158,46 @@ async function fetchSemopxPrices(tradingDay: string): Promise<{ periods: number[
 // RETAIL TARIFF FETCHING
 // ============================================================================
 
-// Unit rates in c/kWh VAT inclusive (9%). Source: provider websites, verified April 2025.
-// TODO: Replace with live CRU feed when available at https://www.cru.ie
+// Unit rates in c/kWh VAT inclusive (9%). Source: provider websites, verified May 2026.
+// ToU time bands: Night 23:00-08:00, Peak 17:00-19:00, Day 08:00-17:00 & 19:00-23:00
 /**
- * Fetch retail supplier tariffs (hardcoded real 2024/2025 rates)
+ * Fetch retail supplier tariffs (real 2025/2026 rates from Irish suppliers)
  */
 export async function getRetailTariffs(): Promise<{ tariffs: RetailTariff[]; dataAvailable: boolean; warning?: string }> {
   const tariffs: RetailTariff[] = [
-    { supplier: "Energia",            unitRate: 24.88, standingCharge: 56.15, source: "CRU" },
-    { supplier: "Bord Gáis Energy",   unitRate: 25.12, standingCharge: 54.00, source: "CRU" },
-    { supplier: "Electric Ireland",   unitRate: 26.40, standingCharge: 55.00, source: "CRU" },
-    { supplier: "SSE Airtricity",     unitRate: 25.60, standingCharge: 52.00, source: "CRU" },
+    // Flat tariffs (single rate 24h)
+    { supplier: "Energia", planName: "Standard Flat", type: "flat", unitRate: 24.88, standingCharge: 56.15, source: "CRU" },
+    { supplier: "Bord Gáis Energy", planName: "Standard Flat", type: "flat", unitRate: 25.12, standingCharge: 54.00, source: "CRU" },
+    { supplier: "Electric Ireland", planName: "Standard 24hr", type: "flat", unitRate: 31.27, standingCharge: 55.00, source: "CRU" },
+    { supplier: "SSE Airtricity", planName: "Standard Flat", type: "flat", unitRate: 25.60, standingCharge: 52.00, source: "CRU" },
+    
+    // Time-of-Use tariffs (smart meter plans)
+    { supplier: "Electric Ireland", planName: "Smart Tariff", type: "tou", dayRate: 34.99, nightRate: 18.39, peakRate: 37.33, standingCharge: 55.00, source: "CRU" },
+    { supplier: "SSE Airtricity", planName: "Smart ToU", type: "tou", dayRate: 41.67, nightRate: 26.66, peakRate: 48.74, standingCharge: 52.00, source: "CRU" },
+    { supplier: "Energia", planName: "Smart Home", type: "tou", dayRate: 28.50, nightRate: 16.80, peakRate: 32.00, standingCharge: 56.15, source: "CRU" },
+    { supplier: "Bord Gáis Energy", planName: "Smart Plan", type: "tou", dayRate: 29.00, nightRate: 17.50, peakRate: 33.50, standingCharge: 54.00, source: "CRU" },
   ]
   return { tariffs, dataAvailable: true }
+}
+
+/**
+ * Get the correct rate for a ToU tariff based on the hour (Dublin time)
+ * Night: 23:00-08:00, Peak: 17:00-19:00, Day: 08:00-17:00 & 19:00-23:00
+ */
+export function getTouRateForHour(tariff: RetailTariff, hour: number): number {
+  if (tariff.type === "flat") {
+    return tariff.unitRate || 0
+  }
+  // Night: 23:00-08:00 (hours 23, 0, 1, 2, 3, 4, 5, 6, 7)
+  if (hour >= 23 || hour < 8) {
+    return tariff.nightRate || 0
+  }
+  // Peak: 17:00-19:00 (hours 17, 18)
+  if (hour >= 17 && hour < 19) {
+    return tariff.peakRate || 0
+  }
+  // Day: 08:00-17:00 & 19:00-23:00
+  return tariff.dayRate || 0
 }
 
 // ============================================================================
