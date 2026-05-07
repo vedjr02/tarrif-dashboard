@@ -16,7 +16,7 @@ import {
   YAxis,
 } from "recharts"
 import { AlertTriangle, Loader2 } from "lucide-react"
-import { getRetailTariffs } from "@/lib/priceService"
+import { getRetailTariffs, getTouRateForHour } from "@/lib/priceService"
 import type { RetailTariff } from "@/lib/priceService"
 
 interface ScreenPriceAnalysisProps {
@@ -58,8 +58,8 @@ export function ScreenPriceAnalysis({
       try {
         const { tariffs, dataAvailable, warning } = await getRetailTariffs()
         setRetailTariffs(tariffs)
-        // Auto-select all tariffs by default so they appear on the chart
-        setSelectedTariffs(new Set(tariffs.map(t => t.supplier)))
+        // Auto-select first 4 tariffs by default (mix of flat and ToU)
+        setSelectedTariffs(new Set(tariffs.slice(0, 4).map(t => `${t.supplier}-${t.planName}`)))
         if (!dataAvailable && warning) {
           setTariffError(warning)
         }
@@ -95,11 +95,14 @@ export function ScreenPriceAnalysis({
 
   const { prices: selectedPrices } = getSelectedData()
 
-  // Build stable color map for tariffs (indexed by supplier position)
+  // Build stable color map for tariffs (indexed by supplier-plan)
   const tariffColorMap = useMemo(() => {
     const map: Record<string, string> = {}
     retailTariffs.forEach((tariff, idx) => {
-      map[tariff.supplier] = `hsl(${60 + idx * 80}, 70%, 55%)`
+      const key = `${tariff.supplier}-${tariff.planName}`
+      // Use distinct colors: flat tariffs = warm colors, ToU = cool colors
+      const hue = tariff.type === "flat" ? 30 + idx * 25 : 180 + idx * 25
+      map[key] = `hsl(${hue}, 70%, 50%)`
     })
     return map
   }, [retailTariffs])
@@ -115,8 +118,12 @@ export function ScreenPriceAnalysis({
       
       const date = new Date(period.start_time_dublin)
 
+      // Get hour from Dublin time for ToU calculation
+      const hour = date.getHours()
+      
       const dataPoint: Record<string, any> = {
         periodIdx: idx,
+        hour,
         time: date.toLocaleTimeString("en-IE", {
           hour: "2-digit",
           minute: "2-digit",
@@ -129,8 +136,11 @@ export function ScreenPriceAnalysis({
       }
 
       // Add retail tariff prices (convert from c/kWh to EUR/kWh)
+      // For ToU tariffs, use the correct rate based on the hour
       retailTariffs.forEach((tariff) => {
-        dataPoint[`tariff_${tariff.supplier}`] = tariff.unitRate / 100
+        const key = `${tariff.supplier}-${tariff.planName}`
+        const rateInCents = getTouRateForHour(tariff, hour)
+        dataPoint[`tariff_${key}`] = rateInCents / 100
       })
 
       return dataPoint
@@ -141,7 +151,8 @@ export function ScreenPriceAnalysis({
   const allValues = chartData.flatMap((d) => {
     const vals = [d.renewPrice]
     retailTariffs.forEach((t) => {
-      vals.push(d[`tariff_${t.supplier}`])
+      const key = `${t.supplier}-${t.planName}`
+      vals.push(d[`tariff_${key}`])
     })
     return vals
   })
@@ -212,15 +223,17 @@ export function ScreenPriceAnalysis({
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : (
               retailTariffs.map((tariff) => {
-                const color = tariffColorMap[tariff.supplier]
-                const isSelected = selectedTariffs.has(tariff.supplier)
+                const key = `${tariff.supplier}-${tariff.planName}`
+                const color = tariffColorMap[key]
+                const isSelected = selectedTariffs.has(key)
+                const label = `${tariff.supplier} ${tariff.type === "tou" ? "(ToU)" : "(Flat)"}`
                 return (
                   <button
-                    key={tariff.supplier}
+                    key={key}
                     onClick={() => {
                       const newSet = new Set(selectedTariffs)
-                      if (isSelected) newSet.delete(tariff.supplier)
-                      else newSet.add(tariff.supplier)
+                      if (isSelected) newSet.delete(key)
+                      else newSet.add(key)
                       setSelectedTariffs(newSet)
                     }}
                     className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all ${
@@ -234,7 +247,7 @@ export function ScreenPriceAnalysis({
                       className="inline-block h-2 w-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: color }}
                     />
-                    {tariff.supplier}
+                    {label}
                   </button>
                 )
               })
@@ -297,14 +310,27 @@ export function ScreenPriceAnalysis({
                                 {Math.abs(data.renewPrice).toFixed(4)} EUR/kWh
                               </span>
                             </div>
-                            {Array.from(selectedTariffs).map((supplier) => (
-                              <div key={supplier} className="flex items-center justify-between gap-6">
-                                <span className="text-xs text-muted-foreground">{supplier}:</span>
-                                <span className="text-xs font-bold text-muted-foreground">
-                                  {data[`tariff_${supplier}`]?.toFixed(4)} EUR/kWh
-                                </span>
-                              </div>
-                            ))}
+                            {Array.from(selectedTariffs).map((key) => {
+                              const tariff = retailTariffs.find(t => `${t.supplier}-${t.planName}` === key)
+                              const displayName = tariff ? `${tariff.supplier} ${tariff.type === "tou" ? "(ToU)" : ""}` : key
+                              return (
+                                <div key={key} className="flex items-center justify-between gap-6">
+                                  <span 
+                                    className="flex items-center gap-1 text-xs"
+                                    style={{ color: tariffColorMap[key] }}
+                                  >
+                                    <span 
+                                      className="h-1.5 w-1.5 rounded-full"
+                                      style={{ backgroundColor: tariffColorMap[key] }}
+                                    />
+                                    {displayName}:
+                                  </span>
+                                  <span className="text-xs font-bold" style={{ color: tariffColorMap[key] }}>
+                                    {data[`tariff_${key}`]?.toFixed(4)} EUR/kWh
+                                  </span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )
@@ -331,18 +357,22 @@ export function ScreenPriceAnalysis({
                   />
 
                   {/* Retail tariff lines - selected only */}
-                  {Array.from(selectedTariffs).map((supplier) => (
-                    <Line
-                      key={supplier}
-                      type="stepAfter"
-                      dataKey={`tariff_${supplier}`}
-                      stroke={tariffColorMap[supplier]}
-                      strokeWidth={1.5}
-                      strokeDasharray="4 4"
-                      dot={false}
-                      name={supplier}
-                    />
-                  ))}
+                  {Array.from(selectedTariffs).map((key) => {
+                    const tariff = retailTariffs.find(t => `${t.supplier}-${t.planName}` === key)
+                    const isFlat = tariff?.type === "flat"
+                    return (
+                      <Line
+                        key={key}
+                        type={isFlat ? "monotone" : "stepAfter"}
+                        dataKey={`tariff_${key}`}
+                        stroke={tariffColorMap[key]}
+                        strokeWidth={isFlat ? 1.5 : 2}
+                        strokeDasharray={isFlat ? "6 3" : undefined}
+                        dot={false}
+                        name={key}
+                      />
+                    )
+                  })}
                 </ComposedChart>
               </ResponsiveContainer>
             )}
