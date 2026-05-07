@@ -568,20 +568,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     }}
                   />
 
-                  <ReferenceLine
-                    x={currentTimeStr}
-                    stroke="var(--foreground)"
-                    strokeWidth={2}
-                    strokeDasharray="6 3"
-                    label={{
-                      value: "NOW",
-                      position: "top",
-                      fill: "var(--foreground)",
-                      fontSize: 11,
-                      fontWeight: "bold",
-                    }}
-                  />
-
                   {/* Wind gusts - background area */}
                   <Area
                     type="monotone"
@@ -601,6 +587,22 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     strokeWidth={2}
                     fill="url(#windSpeedGradient)"
                     name="Wind Speed"
+                  />
+
+                  {/* NOW reference line - rendered last so it appears on top */}
+                  <ReferenceLine
+                    x={currentTimeStr}
+                    stroke="white"
+                    strokeWidth={2}
+                    strokeDasharray="6 3"
+                    label={{
+                      value: "NOW",
+                      position: "insideTopRight",
+                      fill: "white",
+                      fontSize: 11,
+                      fontWeight: "bold",
+                      offset: 8,
+                    }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
