@@ -212,12 +212,12 @@ export function ScreenPriceAnalysis({
         </CardContent>
       </Card>
 
-      {/* Comparison Curve Chart */}
-      <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
-        <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base sm:text-lg">Renew vs Retail Tariffs</CardTitle>
-
-          {/* Tariff selector inline checkboxes */}
+      {/* Tariff Selector */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm sm:text-base">Compare with Retail Tariffs</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
           <div className="flex flex-wrap gap-2">
             {tariffLoading ? (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -226,7 +226,6 @@ export function ScreenPriceAnalysis({
                 const key = `${tariff.supplier}-${tariff.planName}`
                 const color = tariffColorMap[key]
                 const isSelected = selectedTariffs.has(key)
-                const label = `${tariff.supplier} ${tariff.type === "tou" ? "(ToU)" : "(Flat)"}`
                 return (
                   <button
                     key={key}
@@ -236,23 +235,30 @@ export function ScreenPriceAnalysis({
                       else newSet.add(key)
                       setSelectedTariffs(newSet)
                     }}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
                       isSelected
                         ? "border-transparent text-white"
-                        : "border-border text-muted-foreground bg-transparent"
+                        : "border-border text-muted-foreground bg-transparent hover:bg-muted/50"
                     }`}
                     style={isSelected ? { backgroundColor: color, borderColor: color } : {}}
                   >
                     <span
-                      className="inline-block h-2 w-2 rounded-full flex-shrink-0"
+                      className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: color }}
                     />
-                    {label}
+                    {tariff.supplier} - {tariff.planName}
                   </button>
                 )
               })
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Comparison Curve Chart */}
+      <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base sm:text-lg">Renew vs Retail Tariffs</CardTitle>
         </CardHeader>
 
         <CardContent className="p-2 sm:p-4">
@@ -312,7 +318,7 @@ export function ScreenPriceAnalysis({
                             </div>
                             {Array.from(selectedTariffs).map((key) => {
                               const tariff = retailTariffs.find(t => `${t.supplier}-${t.planName}` === key)
-                              const displayName = tariff ? `${tariff.supplier} ${tariff.type === "tou" ? "(ToU)" : ""}` : key
+                              const displayName = tariff ? `${tariff.supplier} ${tariff.planName}` : key
                               return (
                                 <div key={key} className="flex items-center justify-between gap-6">
                                   <span 
