@@ -149,12 +149,13 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
   const chartData = useMemo(() => {
     if (!displayWindData.length) return []
 
-    return displayWindData.map((point) => {
+    return displayWindData.map((point, idx) => {
       const date = new Date(point.timestamp)
       const hour = date.getHours()
       const band = getTimeOfUseBand(hour)
 
       return {
+        idx, // unique index for each data point
         time: date.toLocaleTimeString("en-IE", {
           hour: "2-digit",
           minute: "2-digit",
@@ -175,20 +176,39 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         hour,
         band: band.band,
         bandColor: band.color,
+        timestamp: point.timestamp, // keep original timestamp
       }
     })
   }, [displayWindData])
 
-  // Get current time string for reference line
-  const currentTimeStr = useMemo(() => {
+  // Find the current hour index in displayWindData (for NOW reference line)
+  const currentHourIndex = useMemo(() => {
+    if (!displayWindData.length) return -1
     const now = new Date()
-    return now.toLocaleTimeString("en-IE", {
+    const nowHour = now.toLocaleString("en-IE", {
+      year: "numeric",
+      month: "2-digit", 
+      day: "2-digit",
       hour: "2-digit",
-      minute: "2-digit",
       hour12: false,
       timeZone: "Europe/Dublin",
     })
-  }, [])
+    // Find the index of the current hour in the data
+    const idx = displayWindData.findIndex(d => {
+      const dataHour = new Date(d.timestamp).toLocaleString("en-IE", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit", 
+        hour: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Dublin",
+      })
+      return dataHour === nowHour
+    })
+    return idx
+  }, [displayWindData])
+  
+
   
   // Format last data time for display
   const formatDataTime = (isoString: string | null) => {
@@ -511,11 +531,12 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                   </defs>
 
                   <XAxis
-                    dataKey="time"
+                    dataKey="idx"
                     tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
                     interval={7}
+                    tickFormatter={(idx) => chartData[idx]?.time ?? ""}
                   />
 
                   <YAxis
@@ -568,13 +589,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     }}
                   />
 
-                  <ReferenceLine
-                    x={currentTimeStr}
-                    stroke="var(--foreground)"
-                    strokeWidth={2}
-                    strokeDasharray="6 3"
-                  />
-
                   {/* Wind gusts - background area */}
                   <Area
                     type="monotone"
@@ -595,6 +609,23 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     fill="url(#windSpeedGradient)"
                     name="Wind Speed"
                   />
+
+                  {/* NOW reference line - rendered last so it appears on top */}
+                  {currentHourIndex >= 0 && (
+                    <ReferenceLine
+                      x={currentHourIndex}
+                      stroke="white"
+                      strokeWidth={2}
+                      strokeDasharray="6 3"
+                      label={{
+                        value: "NOW",
+                        position: "top",
+                        fill: "white",
+                        fontSize: 11,
+                        fontWeight: "bold",
+                      }}
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             ) : (

@@ -88,38 +88,46 @@ export function ScreenPriceStatistics({
               <span className="text-xs text-muted-foreground sm:text-sm">48 periods</span>
             </div>
 
-            {/* Bar chart */}
-            <div className="flex items-end gap-px" style={{ height: "80px" }}>
-              {dayPrices.periods.map((period, idx) => {
-                const isNow = idx === currentPeriodIndex
-                const range = currentPrice.daily_max - currentPrice.daily_min
-                const heightPct = range > 0
-                  ? ((period.price_eur_mwh - currentPrice.daily_min) / range) * 80 + 20
-                  : 50
-                return (
-                  <div
-                    key={period.period}
-                    className="relative flex-1"
-                    style={{ height: "80px" }}
-                    title={`${formatTime(period.start_time_dublin)} — €${period.price_eur_mwh.toFixed(1)}/MWh`}
-                  >
+            {/* Bar chart with NOW indicator */}
+            <div className="relative">
+              <div className="flex items-end gap-px" style={{ height: "80px" }}>
+                {dayPrices.periods.map((period, idx) => {
+                  const isNow = idx === currentPeriodIndex
+                  const range = currentPrice.daily_max - currentPrice.daily_min
+                  const heightPct = range > 0
+                    ? ((period.price_eur_mwh - currentPrice.daily_min) / range) * 80 + 20
+                    : 50
+                  return (
                     <div
-                      className="absolute bottom-0 w-full rounded-t-sm"
-                      style={{
-                        height: `${heightPct}%`,
-                        backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile),
-                        opacity: isNow ? 1 : 0.65,
-                        outline: isNow ? "2px solid white" : "none",
-                        outlineOffset: "1px",
-                      }}
-                    />
-                  </div>
-                )
-              })}
+                      key={period.period}
+                      className="relative flex-1"
+                      style={{ height: "80px" }}
+                      title={`${formatTime(period.start_time_dublin)} — €${period.price_eur_mwh.toFixed(1)}/MWh`}
+                    >
+                      <div
+                        className="absolute bottom-0 w-full rounded-t-sm"
+                        style={{
+                          height: `${heightPct}%`,
+                          backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile),
+                          opacity: isNow ? 1 : 0.65,
+                          outline: isNow ? "2px solid white" : "none",
+                          outlineOffset: "1px",
+                        }}
+                      />
+                      {isNow && (
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                          <div className="w-0.5 h-2 bg-foreground" />
+                          <span className="text-[8px] font-bold text-foreground whitespace-nowrap">NOW</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Time axis */}
-            <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
+            <div className="mt-6 flex justify-between text-xs text-muted-foreground">
               <span>00:00</span>
               <span>06:00</span>
               <span>12:00</span>
