@@ -31,6 +31,8 @@ interface ScreenPriceAnalysisProps {
 
 type DayView = "today" | "tomorrow" | "yesterday"
 
+// Force reload v2 - tariff selector with full plan names
+
 export function ScreenPriceAnalysis({
   todayPrices,
   todayTariffs,
