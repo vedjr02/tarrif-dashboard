@@ -95,6 +95,12 @@ export function ScreenPriceAnalysis({
     return RETAIL_TARIFFS.filter(t => t.type !== "flat") // dynamic
   }, [tariffTypeFilter])
 
+  // Update selectedTariffs when filter changes - select all tariffs of the filtered type
+  useEffect(() => {
+    if (!mounted) return
+    setSelectedTariffs(new Set(filteredTariffs.map(t => t.id)))
+  }, [tariffTypeFilter, filteredTariffs, mounted])
+
   // Group tariffs by supplier for dropdown
   const tariffsBySupplier = useMemo(() => {
     const grouped: Record<string, RetailTariff[]> = {}
