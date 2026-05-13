@@ -54,6 +54,7 @@ export function ScreenPriceAnalysis({
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
+  const [tariffTypeFilter, setTariffTypeFilter] = useState<"all" | "dynamic" | "fixed">("all")
 
   useEffect(() => {
     setMounted(true)
@@ -68,6 +69,31 @@ export function ScreenPriceAnalysis({
   }
 
   const selectedPrices = getSelectedPrices()
+
+  // Get displayed date based on dayView
+  const getDisplayDate = () => {
+    const now = new Date()
+    let targetDate = now
+    if (dayView === "yesterday") {
+      targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    } else if (dayView === "tomorrow") {
+      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    }
+    return targetDate.toLocaleDateString("en-IE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Europe/Dublin",
+    })
+  }
+
+  // Filter tariffs by type (dynamic = tou/daynight/ev, fixed = flat)
+  const filteredTariffs = useMemo(() => {
+    if (tariffTypeFilter === "all") return RETAIL_TARIFFS
+    if (tariffTypeFilter === "fixed") return RETAIL_TARIFFS.filter(t => t.type === "flat")
+    return RETAIL_TARIFFS.filter(t => t.type !== "flat") // dynamic
+  }, [tariffTypeFilter])
 
   // Group tariffs by supplier for dropdown
   const tariffsBySupplier = useMemo(() => {
@@ -204,7 +230,7 @@ export function ScreenPriceAnalysis({
             Price Analysis
           </h2>
           <p className="text-xs text-muted-foreground sm:text-sm lg:text-base">
-            SEM wholesale vs Irish retail tariffs (c/kWh)
+            DAM wholesale vs Irish retail tariffs (c/kWh) &middot; {getDisplayDate()}
           </p>
         </div>
         <div className="flex gap-1 border border-border rounded-lg p-1">
@@ -237,13 +263,42 @@ export function ScreenPriceAnalysis({
         </div>
       </div>
 
-      {/* Controls: Tariff Selector + Stats */}
+      {/* Controls: Tariff Selector + Type Filter + Stats */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Tariff Multi-Select Dropdown */}
-        <DropdownMenu>
+        <div className="flex flex-wrap gap-2">
+          {/* Tariff Type Filter */}
+          <div className="flex gap-1 border border-border rounded-lg p-1">
+            <Button
+              variant={tariffTypeFilter === "all" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setTariffTypeFilter("all")}
+              className="h-7 text-xs"
+            >
+              All
+            </Button>
+            <Button
+              variant={tariffTypeFilter === "dynamic" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setTariffTypeFilter("dynamic")}
+              className="h-7 text-xs"
+            >
+              Dynamic
+            </Button>
+            <Button
+              variant={tariffTypeFilter === "fixed" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setTariffTypeFilter("fixed")}
+              className="h-7 text-xs"
+            >
+              Fixed
+            </Button>
+          </div>
+
+          {/* Tariff Multi-Select Dropdown */}
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-9 gap-2">
-              <span>Retail Tariffs ({selectedTariffs.size}/{RETAIL_TARIFFS.length})</span>
+              <span>Retail Tariffs ({selectedTariffs.size}/{filteredTariffs.length})</span>
               <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -299,10 +354,11 @@ export function ScreenPriceAnalysis({
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
 
-        {/* Average SEM price */}
+        {/* Average DAM price */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
-          <span className="text-xs text-muted-foreground">Avg SEM ({dayView}):</span>
+          <span className="text-xs text-muted-foreground">Avg DAM ({dayView}):</span>
           <span className="text-sm font-bold text-amber-600">{avgSemPrice.toFixed(2)} c/kWh</span>
         </div>
       </div>
@@ -310,7 +366,7 @@ export function ScreenPriceAnalysis({
       {/* Chart */}
       <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base sm:text-lg">SEM Wholesale vs Retail Tariffs</CardTitle>
+          <CardTitle className="text-base sm:text-lg">DAM Wholesale vs Retail Tariffs</CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-4">
           <div className="w-full" style={{ height: '400px' }}>
@@ -318,7 +374,7 @@ export function ScreenPriceAnalysis({
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  margin={{ top: 25, right: 10, left: 0, bottom: 0 }}
                 >
                   <defs>
                     <linearGradient id="semGradient" x1="0" y1="0" x2="0" y2="1">
@@ -358,14 +414,14 @@ export function ScreenPriceAnalysis({
                         <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg max-w-sm">
                           <p className="text-sm font-bold text-foreground">{data.time}</p>
                           <p className="text-xs text-muted-foreground mb-2">
-                            SEM: {(data.semPriceEurMwh as number).toFixed(2)} €/MWh
+                            DAM: {(data.semPriceEurMwh as number).toFixed(2)} €/MWh
                           </p>
                           <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                            {/* SEM wholesale */}
+                            {/* DAM wholesale */}
                             <div className="flex items-center justify-between gap-4">
                               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
                                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                                SEM Wholesale:
+                                DAM Wholesale:
                               </span>
                               <span className="text-xs font-bold text-amber-600">
                                 {(data.semPrice as number).toFixed(2)} c/kWh
@@ -420,7 +476,7 @@ export function ScreenPriceAnalysis({
                     />
                   )}
 
-                  {/* SEM wholesale price area (always shown) */}
+                  {/* DAM wholesale price area (always shown) */}
                   <Area
                     type="monotone"
                     dataKey="semPrice"
@@ -428,7 +484,7 @@ export function ScreenPriceAnalysis({
                     strokeWidth={2.5}
                     fill="url(#semGradient)"
                     dot={false}
-                    name="SEM Wholesale"
+                    name="DAM Wholesale"
                   />
 
                   {/* Retail tariff lines */}
@@ -463,7 +519,7 @@ export function ScreenPriceAnalysis({
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30">
           <div className="h-2 w-5 bg-amber-500 rounded" />
-          <span className="text-amber-600 font-medium">SEM Wholesale</span>
+          <span className="text-amber-600 font-medium">DAM Wholesale</span>
         </div>
         
         {/* Show supplier legend when many tariffs selected */}

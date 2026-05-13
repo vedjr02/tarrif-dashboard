@@ -18,7 +18,7 @@ import {
   YAxis,
   ReferenceLine,
 } from "recharts"
-import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge, Thermometer, Droplets, Cloud } from "lucide-react"
+import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge, Thermometer, Droplets, Cloud, Sun, CloudRain, CloudSun, CloudFog } from "lucide-react"
 
 interface WindDataPoint {
   timestamp: string
@@ -41,14 +41,24 @@ interface WeatherData {
   weatherCode: number
 }
 
+interface HourlyWeather {
+  timestamp: string
+  temperature: number
+  precipitation: number
+  cloudCover: number
+  weatherCode: number
+}
+
 interface ApiResponse {
   windData: WindDataPoint[]
   gridStatus: GridStatus
   currentWeather: WeatherData | null
+  hourlyWeather: HourlyWeather[]
   fetchedAt: string
   hasWindData: boolean
   hasGridData: boolean
   hasWeatherData?: boolean
+  hasHourlyWeather?: boolean
   windError?: boolean
   gridError?: boolean
 }
@@ -78,6 +88,17 @@ const getWindDirection = (degrees: number): string => {
   const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
   const index = Math.round(degrees / 45) % 8
   return directions[index]
+}
+
+// WMO Weather codes to icon and description
+const getWeatherInfo = (code: number): { icon: typeof Sun; description: string } => {
+  if (code === 0) return { icon: Sun, description: "Clear" }
+  if (code <= 3) return { icon: CloudSun, description: "Partly cloudy" }
+  if (code <= 49) return { icon: CloudFog, description: "Foggy" }
+  if (code <= 69) return { icon: CloudRain, description: "Rain" }
+  if (code <= 79) return { icon: Cloud, description: "Snow" }
+  if (code <= 99) return { icon: CloudRain, description: "Thunderstorm" }
+  return { icon: Cloud, description: "Cloudy" }
 }
 
 export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastProps) {
@@ -121,7 +142,7 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
     )
   }, [])
 
-  const currentBand = getTimeOfUseBand(currentHour)
+
 
   // Get current wind data
   const currentWindData = useMemo(() => {
@@ -251,68 +272,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
           </div>
         )}
       </div>
-
-      {/* Time-of-Use Bands Visual */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm sm:text-base">Time-of-Use Bands</CardTitle>
-        </CardHeader>
-        <CardContent className="p-2 sm:p-4">
-          {/* Current band indicator */}
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div
-              className="px-4 py-2 rounded-full text-white font-bold text-sm sm:text-base"
-              style={{ backgroundColor: currentBand.color }}
-            >
-              {currentBand.band}
-            </div>
-            <span className="text-muted-foreground text-xs sm:text-sm">
-              {currentHour}:00 - {(currentHour + 1) % 24}:00
-            </span>
-          </div>
-
-          {/* 24-hour band visualization */}
-          <div className="flex h-8 sm:h-10 rounded-lg overflow-hidden">
-            {Array.from({ length: 24 }, (_, hour) => {
-              const band = getTimeOfUseBand(hour)
-              const isCurrentHour = hour === currentHour
-              return (
-                <div
-                  key={hour}
-                  className="flex-1 relative transition-all"
-                  style={{
-                    backgroundColor: band.bgColor,
-                    opacity: isCurrentHour ? 1 : 0.6,
-                  }}
-                  title={`${hour}:00 - ${band.band}`}
-                >
-                  {isCurrentHour && (
-                    <div className="absolute inset-0 border-2 border-white rounded-sm" />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap justify-center gap-3 mt-3 text-xs sm:text-sm">
-            {[
-              { band: "Night", hours: "23:00-08:00", color: "var(--q1-cheap)" },
-              { band: "Off-Peak", hours: "08:00-09:00, 19:00-23:00", color: "var(--q2-below)" },
-              { band: "Day", hours: "09:00-17:00", color: "var(--q3-average)" },
-              { band: "Peak", hours: "17:00-19:00", color: "var(--q5-expensive)" },
-            ].map((item) => (
-              <div key={item.band} className="flex items-center gap-1.5">
-                <div
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-muted-foreground">{item.band}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Status Cards - Grid & Weather */}
       <TooltipProvider>
@@ -505,6 +464,77 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
           </UITooltip>
         </div>
       </TooltipProvider>
+
+      {/* 24-Hour Weather Forecast */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+            <Thermometer className="h-4 w-4" />
+            24-Hour Weather Forecast (Dublin)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-2 sm:p-4">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {data?.hourlyWeather ? (
+              (() => {
+                // Filter to show next 24 hours starting from current hour
+                const now = new Date()
+                const currentHourTimestamp = new Date(
+                  now.getFullYear(),
+                  now.getMonth(),
+                  now.getDate(),
+                  now.getHours()
+                ).getTime()
+                
+                const next24Hours = data.hourlyWeather
+                  .filter(h => new Date(h.timestamp).getTime() >= currentHourTimestamp)
+                  .slice(0, 24)
+                
+                return next24Hours.map((hour, idx) => {
+                  const date = new Date(hour.timestamp)
+                  const hourStr = date.toLocaleTimeString("en-IE", {
+                    hour: "2-digit",
+                    hour12: false,
+                    timeZone: "Europe/Dublin",
+                  })
+                  const WeatherIcon = getWeatherInfo(hour.weatherCode).icon
+                  const isNow = idx === 0
+                  
+                  return (
+                    <div
+                      key={hour.timestamp}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-lg min-w-[60px] ${
+                        isNow ? "bg-primary/10 border border-primary" : "bg-muted/30"
+                      }`}
+                    >
+                      <span className={`text-xs font-medium ${isNow ? "text-primary" : "text-muted-foreground"}`}>
+                        {isNow ? "Now" : hourStr}
+                      </span>
+                      <WeatherIcon className={`h-5 w-5 ${isNow ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-sm font-bold">{Math.round(hour.temperature)}°</span>
+                      {hour.precipitation > 0 && (
+                        <span className="text-xs text-blue-500">{hour.precipitation.toFixed(1)}mm</span>
+                      )}
+                      <span className="text-xs text-muted-foreground">{hour.cloudCover}%</span>
+                    </div>
+                  )
+                })
+              })()
+            ) : (
+              <div className="flex items-center justify-center w-full py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+          
+          {/* Legend */}
+          <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
+            <span>Temperature (°C)</span>
+            <span className="text-blue-500">Precipitation (mm)</span>
+            <span>Cloud Cover (%)</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Wind Speed Forecast Chart */}
       <Card className="flex-1 min-h-0 flex flex-col">
