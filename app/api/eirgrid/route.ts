@@ -30,6 +30,14 @@ interface WeatherData {
   weatherCode: number // WMO weather code
 }
 
+interface HourlyWeather {
+  timestamp: string
+  temperature: number
+  precipitation: number
+  cloudCover: number
+  weatherCode: number
+}
+
 interface GridStatus {
   frequency: number | null
   co2Intensity: number | null
@@ -46,6 +54,7 @@ export async function GET() {
     
     let windData: WindDataPoint[] = []
     let currentWeather: WeatherData | null = null
+    let hourlyWeather: HourlyWeather[] = []
     let windError = false
     
     if (windForecastRes.ok) {
@@ -55,12 +64,25 @@ export async function GET() {
         const speeds = windJson.hourly?.wind_speed_10m || []
         const directions = windJson.hourly?.wind_direction_10m || []
         const gusts = windJson.hourly?.wind_gusts_10m || []
+        const temps = windJson.hourly?.temperature_2m || []
+        const precips = windJson.hourly?.precipitation || []
+        const clouds = windJson.hourly?.cloud_cover || []
+        const weatherCodes = windJson.hourly?.weather_code || []
         
         windData = times.map((time: string, i: number) => ({
           timestamp: time,
           windSpeed: speeds[i] ?? 0,
           windDirection: directions[i] ?? 0,
           windGusts: gusts[i] ?? 0,
+        }))
+        
+        // Parse hourly weather for forecast widget
+        hourlyWeather = times.map((time: string, i: number) => ({
+          timestamp: time,
+          temperature: temps[i] ?? 0,
+          precipitation: precips[i] ?? 0,
+          cloudCover: clouds[i] ?? 0,
+          weatherCode: weatherCodes[i] ?? 0,
         }))
         
         // Parse current weather
@@ -150,10 +172,12 @@ export async function GET() {
       windData,
       gridStatus,
       currentWeather,
+      hourlyWeather,
       fetchedAt: new Date().toISOString(),
       hasWindData: windData.length > 0,
       hasGridData: !gridError,
       hasWeatherData: currentWeather !== null,
+      hasHourlyWeather: hourlyWeather.length > 0,
       windError,
       gridError,
     })

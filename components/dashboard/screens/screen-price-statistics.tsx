@@ -14,6 +14,7 @@ interface ScreenPriceStatisticsProps {
   dayPrices: DayPrices
   dayTariffs?: DayTariffs
   currentPeriodIndex: number
+  dayView?: "today" | "tomorrow" | "yesterday"
 }
 
 export function ScreenPriceStatistics({ 
@@ -23,6 +24,7 @@ export function ScreenPriceStatistics({
   dayPrices,
   dayTariffs,
   currentPeriodIndex,
+  dayView = "today",
 }: ScreenPriceStatisticsProps) {
   const [countdown, setCountdown] = useState("")
 
@@ -72,6 +74,26 @@ export function ScreenPriceStatistics({
     ? next12.reduce((min, p) => p.price_eur_mwh < min.price_eur_mwh ? p : min, next12[0])
     : null
 
+  // Get displayed date based on dayView
+  const getDisplayDate = () => {
+    const now = new Date()
+    let targetDate = now
+    if (dayView === "yesterday") {
+      targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    } else if (dayView === "tomorrow") {
+      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    }
+    return targetDate.toLocaleDateString("en-IE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Europe/Dublin",
+    })
+  }
+
+
+
   return (
     <div className="flex h-full flex-col gap-3 p-3 sm:gap-5 sm:p-5 lg:gap-8 lg:p-8">
 
@@ -81,11 +103,14 @@ export function ScreenPriceStatistics({
         {/* Today's Price Profile */}
         <Card className="bg-card/50">
           <CardContent className="flex flex-col justify-between p-3 sm:p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-foreground sm:text-base lg:text-xl">
-                Today&apos;s Price Profile
-              </span>
-              <span className="text-xs text-muted-foreground sm:text-sm">48 periods</span>
+            <div className="mb-2 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground sm:text-base lg:text-xl">
+                  Day Ahead Price Profile
+                </span>
+                <span className="text-xs text-muted-foreground sm:text-sm">48 periods</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{getDisplayDate()}</span>
             </div>
 
             {/* Bar chart with NOW indicator */}
