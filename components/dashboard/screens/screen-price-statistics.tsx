@@ -92,24 +92,7 @@ export function ScreenPriceStatistics({
     })
   }
 
-  // Get current hour for ToU band
-  const currentHour = new Date().getHours()
-  
-  // Time-of-Use band definitions
-  const getTimeOfUseBand = (hour: number): { band: string; color: string } => {
-    if (hour >= 23 || hour < 8) {
-      return { band: "Night", color: "var(--q1-cheap)" }
-    }
-    if (hour >= 17 && hour < 19) {
-      return { band: "Peak", color: "var(--q5-expensive)" }
-    }
-    if ((hour >= 8 && hour < 9) || (hour >= 19 && hour < 23)) {
-      return { band: "Off-Peak", color: "var(--q2-below)" }
-    }
-    return { band: "Day", color: "var(--q3-average)" }
-  }
 
-  const currentBand = getTimeOfUseBand(currentHour)
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 sm:gap-5 sm:p-5 lg:gap-8 lg:p-8">
@@ -241,59 +224,6 @@ export function ScreenPriceStatistics({
           </CardContent>
         </Card>
       </div>
-
-      {/* Time-of-Use Bands */}
-      <Card className="bg-card/50">
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-foreground sm:text-base">Time-of-Use Bands</span>
-            <div
-              className="px-3 py-1 rounded-full text-white text-xs font-bold sm:text-sm"
-              style={{ backgroundColor: currentBand.color }}
-            >
-              {currentBand.band} {currentHour}:00-{(currentHour + 1) % 24}:00
-            </div>
-          </div>
-          
-          {/* 24-hour band visualization */}
-          <div className="flex h-6 sm:h-8 rounded-lg overflow-hidden">
-            {Array.from({ length: 24 }, (_, hour) => {
-              const band = getTimeOfUseBand(hour)
-              const isCurrentHour = hour === currentHour
-              return (
-                <div
-                  key={hour}
-                  className="flex-1 relative transition-all"
-                  style={{
-                    backgroundColor: band.color,
-                    opacity: isCurrentHour ? 1 : 0.5,
-                  }}
-                  title={`${hour}:00 - ${band.band}`}
-                >
-                  {isCurrentHour && (
-                    <div className="absolute inset-0 border-2 border-white rounded-sm" />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap justify-center gap-3 mt-2 text-xs">
-            {[
-              { band: "Night", hours: "23:00-08:00", color: "var(--q1-cheap)" },
-              { band: "Off-Peak", hours: "08-09, 19-23", color: "var(--q2-below)" },
-              { band: "Day", hours: "09:00-17:00", color: "var(--q3-average)" },
-              { band: "Peak", hours: "17:00-19:00", color: "var(--q5-expensive)" },
-            ].map((item) => (
-              <div key={item.band} className="flex items-center gap-1">
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-muted-foreground">{item.band}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4 lg:gap-6">

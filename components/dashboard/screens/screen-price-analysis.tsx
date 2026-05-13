@@ -35,6 +35,20 @@ import {
 
 type DayView = "today" | "tomorrow" | "yesterday"
 
+// Time-of-Use band definitions
+const getTimeOfUseBand = (hour: number): { band: string; color: string } => {
+  if (hour >= 23 || hour < 8) {
+    return { band: "Night", color: "var(--q1-cheap)" }
+  }
+  if (hour >= 17 && hour < 19) {
+    return { band: "Peak", color: "var(--q5-expensive)" }
+  }
+  if ((hour >= 8 && hour < 9) || (hour >= 19 && hour < 23)) {
+    return { band: "Off-Peak", color: "var(--q2-below)" }
+  }
+  return { band: "Day", color: "var(--q3-average)" }
+}
+
 interface ScreenPriceAnalysisProps {
   todayPrices: DayPrices
   todayTariffs?: DayTariffs | null
@@ -126,6 +140,7 @@ export function ScreenPriceAnalysis({
       // SEM wholesale in c/kWh
       const semPriceCents = semPriceEurMwh / 10
       
+      const touBand = getTimeOfUseBand(hour)
       const dataPoint: Record<string, number | string> = {
         periodIdx: idx,
         hour,
@@ -138,6 +153,8 @@ export function ScreenPriceAnalysis({
         semPriceEurMwh,
         semPrice: semPriceCents, // c/kWh
         quintile: period.quintile,
+        touBand: touBand.band,
+        touColor: touBand.color,
       }
 
       // Add all retail tariff rates based on hour (for ToU tariffs)
@@ -518,6 +535,35 @@ export function ScreenPriceAnalysis({
               </div>
             )}
           </div>
+          {/* Time-of-Use Bands Bar */}
+          {mounted && chartData.length > 0 && (
+            <div className="mt-2 px-[35px] pr-[10px]">
+              <div className="flex h-4 rounded overflow-hidden">
+                {chartData.map((point, idx) => (
+                  <div
+                    key={idx}
+                    className="flex-1"
+                    style={{ backgroundColor: point.touColor as string, opacity: 0.7 }}
+                    title={`${point.time} - ${point.touBand}`}
+                  />
+                ))}
+              </div>
+              {/* ToU Legend */}
+              <div className="flex justify-center gap-4 mt-2 text-xs">
+                {[
+                  { band: "Night", hours: "23:00-08:00", color: "var(--q1-cheap)" },
+                  { band: "Off-Peak", hours: "08-09, 19-23", color: "var(--q2-below)" },
+                  { band: "Day", hours: "09:00-17:00", color: "var(--q3-average)" },
+                  { band: "Peak", hours: "17:00-19:00", color: "var(--q5-expensive)" },
+                ].map((item) => (
+                  <div key={item.band} className="flex items-center gap-1">
+                    <div className="h-2 w-3 rounded-sm" style={{ backgroundColor: item.color, opacity: 0.7 }} />
+                    <span className="text-muted-foreground">{item.band}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
