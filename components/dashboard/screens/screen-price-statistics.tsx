@@ -216,7 +216,7 @@ export function ScreenPriceStatistics({
         </Card>
       </div>
 
-      {/* Stats Row - Inline */}
+      {/* Stats Row - Centered Inline */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
         {[
           { icon: TrendingDown, label: "Daily Min", value: `€${Math.abs(currentPrice.daily_min).toFixed(1)}`, color: "text-primary" },
@@ -225,14 +225,12 @@ export function ScreenPriceStatistics({
           { icon: Clock, label: "Next Change", value: countdown, color: "text-accent", mono: true },
         ].map(({ icon: Icon, label, value, color, mono }) => (
           <Card key={label} className="bg-card/50">
-            <CardContent className="flex items-center gap-2 p-2 sm:p-3 lg:p-4">
+            <CardContent className="flex items-center justify-center gap-2 p-2 sm:p-3 lg:p-4">
               <Icon className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${color}`} />
-              <div className="flex items-baseline gap-1.5 min-w-0">
-                <span className="text-xs text-muted-foreground sm:text-sm whitespace-nowrap">{label}:</span>
-                <span className={`text-sm font-bold tabular-nums text-foreground sm:text-base lg:text-lg truncate ${mono ? "font-mono" : ""}`}>
-                  {value}
-                </span>
-              </div>
+              <span className="text-xs text-muted-foreground sm:text-sm whitespace-nowrap">{label}:</span>
+              <span className={`text-sm font-bold tabular-nums text-foreground sm:text-base lg:text-lg ${mono ? "font-mono" : ""}`}>
+                {value}
+              </span>
             </CardContent>
           </Card>
         ))}

@@ -69,35 +69,36 @@ export function ScreenPriceAnalysis({
   const { resolvedTheme } = useTheme()
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
-  const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
-  const [tariffTypeFilter, setTariffTypeFilter] = useState<"all" | "dynamic" | "fixed">("all")
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
+  const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(() => {
+    // Initialize from localStorage if available (client-side only)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem("adflex-selected-tariffs")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed)) {
+            return new Set(parsed)
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
+    return new Set(RETAIL_TARIFFS.map(t => t.id))
+  })
+  const [tariffTypeFilter, setTariffTypeFilter] = useState<"all" | "dynamic" | "fixed">(() => {
+    if (typeof window !== 'undefined') {
+      const savedFilter = localStorage.getItem("adflex-tariff-filter")
+      if (savedFilter && ["all", "dynamic", "fixed"].includes(savedFilter)) {
+        return savedFilter as "all" | "dynamic" | "fixed"
+      }
+    }
+    return "all"
+  })
+  const [userChangedFilter, setUserChangedFilter] = useState(false)
 
-  // Load saved tariff selections from localStorage on mount
   useEffect(() => {
     setMounted(true)
-    const saved = localStorage.getItem("adflex-selected-tariffs")
-    const savedFilter = localStorage.getItem("adflex-tariff-filter")
-    
-    if (savedFilter && ["all", "dynamic", "fixed"].includes(savedFilter)) {
-      setTariffTypeFilter(savedFilter as "all" | "dynamic" | "fixed")
-    }
-    
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          setSelectedTariffs(new Set(parsed))
-        }
-      } catch {
-        setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
-      }
-    } else {
-      setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
-    }
-    
-    // Mark initial load as complete after a tick to avoid triggering the filter effect
-    setTimeout(() => setInitialLoadComplete(true), 0)
   }, [])
 
   // Save tariff selections to localStorage when they change
@@ -150,11 +151,12 @@ export function ScreenPriceAnalysis({
     return RETAIL_TARIFFS.filter(t => t.type !== "flat") // dynamic
   }, [tariffTypeFilter])
 
-  // Update selectedTariffs when filter changes - but only after initial load
+  // Update selectedTariffs when filter changes - only when user explicitly changes filter
   useEffect(() => {
-    if (!mounted || !initialLoadComplete) return
+    if (!mounted || !userChangedFilter) return
     setSelectedTariffs(new Set(filteredTariffs.map(t => t.id)))
-  }, [tariffTypeFilter, filteredTariffs, mounted, initialLoadComplete])
+    setUserChangedFilter(false)
+  }, [tariffTypeFilter, filteredTariffs, mounted, userChangedFilter])
 
   // Group tariffs by supplier for dropdown
   const tariffsBySupplier = useMemo(() => {
@@ -335,7 +337,10 @@ export function ScreenPriceAnalysis({
             <Button
               variant={tariffTypeFilter === "all" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setTariffTypeFilter("all")}
+              onClick={() => {
+                setUserChangedFilter(true)
+                setTariffTypeFilter("all")
+              }}
               className="h-7 text-xs"
             >
               All
@@ -343,7 +348,10 @@ export function ScreenPriceAnalysis({
             <Button
               variant={tariffTypeFilter === "dynamic" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setTariffTypeFilter("dynamic")}
+              onClick={() => {
+                setUserChangedFilter(true)
+                setTariffTypeFilter("dynamic")
+              }}
               className="h-7 text-xs"
             >
               Dynamic
@@ -351,7 +359,10 @@ export function ScreenPriceAnalysis({
             <Button
               variant={tariffTypeFilter === "fixed" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setTariffTypeFilter("fixed")}
+              onClick={() => {
+                setUserChangedFilter(true)
+                setTariffTypeFilter("fixed")
+              }}
               className="h-7 text-xs"
             >
               Fixed
