@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { useTheme } from "next-themes"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -65,16 +66,52 @@ export function ScreenPriceAnalysis({
   yesterdayPrices,
   currentPeriodIndex,
 }: ScreenPriceAnalysisProps) {
+  const { resolvedTheme } = useTheme()
   const [dayView, setDayView] = useState<DayView>("today")
   const [mounted, setMounted] = useState(false)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
   const [tariffTypeFilter, setTariffTypeFilter] = useState<"all" | "dynamic" | "fixed">("all")
 
+  // Load saved tariff selections from localStorage on mount
   useEffect(() => {
     setMounted(true)
-    // Select all tariffs by default
-    setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
+    const saved = localStorage.getItem("adflex-selected-tariffs")
+    const savedFilter = localStorage.getItem("adflex-tariff-filter")
+    
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          setSelectedTariffs(new Set(parsed))
+        }
+      } catch {
+        setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
+      }
+    } else {
+      setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
+    }
+    
+    if (savedFilter && ["all", "dynamic", "fixed"].includes(savedFilter)) {
+      setTariffTypeFilter(savedFilter as "all" | "dynamic" | "fixed")
+    }
   }, [])
+
+  // Save tariff selections to localStorage when they change
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem("adflex-selected-tariffs", JSON.stringify([...selectedTariffs]))
+    }
+  }, [selectedTariffs, mounted])
+
+  // Save filter to localStorage when it changes
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem("adflex-tariff-filter", tariffTypeFilter)
+    }
+  }, [tariffTypeFilter, mounted])
+
+  // DAM line color based on theme
+  const damLineColor = resolvedTheme === "dark" ? "#ffffff" : "#000000"
 
   const getSelectedPrices = () => {
     if (dayView === "tomorrow" && tomorrowPrices) return tomorrowPrices
@@ -503,7 +540,7 @@ export function ScreenPriceAnalysis({
                   <Area
                     type="monotone"
                     dataKey="semPrice"
-                    stroke="#f59e0b"
+                    stroke={damLineColor}
                     strokeWidth={2.5}
                     fill="url(#semGradient)"
                     dot={false}

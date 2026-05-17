@@ -57,7 +57,6 @@ export function ScreenPriceStatistics({
     : "same"
 
   const nextPeriods = dayPrices.periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
-  const nextTariffPeriods = dayTariffs?.periods.slice(currentPeriodIndex + 1, currentPeriodIndex + 7)
 
   const formatTime = (isoString: string) => {
     const date = new Date(isoString)
@@ -211,22 +210,14 @@ export function ScreenPriceStatistics({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:gap-5 sm:px-6">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-accent sm:h-6 sm:w-6" />
-                  <span className="text-2xl font-bold text-foreground sm:text-3xl">
-                    {(currentPrice.price_eur_mwh / 1000).toFixed(4)}
-                  </span>
-                  <span className="text-sm text-muted-foreground">€/kWh</span>
-                </div>
-              </div>
+
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
+      {/* Stats Row - Flattened */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
         {[
           { icon: TrendingDown, label: "Daily Min", value: `€${Math.abs(currentPrice.daily_min).toFixed(1)}`, color: "text-primary" },
           { icon: TrendingUp, label: "Daily Max", value: `€${Math.abs(currentPrice.daily_max).toFixed(1)}`, color: "text-destructive" },
@@ -234,10 +225,10 @@ export function ScreenPriceStatistics({
           { icon: Clock, label: "Next Change", value: countdown, color: "text-accent", mono: true },
         ].map(({ icon: Icon, label, value, color, mono }) => (
           <Card key={label} className="bg-card/50">
-            <CardContent className="flex flex-col items-center justify-center p-2 sm:p-4 lg:p-6">
-              <Icon className={`h-4 w-4 sm:h-6 sm:w-6 lg:h-8 lg:w-8 mb-1 ${color}`} />
-              <span className="text-xs text-muted-foreground sm:text-sm lg:text-base">{label}</span>
-              <span className={`text-sm font-bold tabular-nums text-foreground sm:text-xl lg:text-3xl ${mono ? "font-mono" : ""}`}>
+            <CardContent className="flex flex-col items-center justify-center p-1.5 sm:p-2 lg:p-3">
+              <Icon className={`h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 mb-0.5 ${color}`} />
+              <span className="text-[10px] text-muted-foreground sm:text-xs">{label}</span>
+              <span className={`text-xs font-bold tabular-nums text-foreground sm:text-base lg:text-xl ${mono ? "font-mono" : ""}`}>
                 {value}
               </span>
             </CardContent>
@@ -245,45 +236,38 @@ export function ScreenPriceStatistics({
         ))}
       </div>
 
-      {/* Next 6 Periods */}
+      {/* Next 6 Periods - Compact */}
       <Card className="flex-1 min-h-0">
-        <CardContent className="h-full p-3 sm:p-5 lg:p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary sm:h-6 sm:w-6" />
-            <h3 className="text-base font-bold text-foreground sm:text-xl lg:text-2xl">Next 6 Periods</h3>
+        <CardContent className="h-full p-2 sm:p-3 lg:p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Clock className="h-3 w-3 text-primary sm:h-4 sm:w-4" />
+            <h3 className="text-sm font-bold text-foreground sm:text-base lg:text-lg">Next 6 Periods</h3>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3 lg:gap-4">
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6 sm:gap-2 lg:gap-3">
             {nextPeriods.map((period, idx) => {
               const isCheapest = cheapestPeriod && period.period === cheapestPeriod.period
-              const tariffPeriod = nextTariffPeriods?.[idx]
 
               return (
                 <div
                   key={period.period}
-                  className={`relative flex flex-col items-center justify-center rounded-xl border-2 p-2 sm:rounded-2xl sm:p-3 lg:p-5 ${
-                    isCheapest ? "border-accent bg-accent/10" : "border-border bg-card/50"
+                  className={`relative flex flex-col items-center justify-center rounded-lg border p-1.5 sm:rounded-xl sm:p-2 lg:p-3 ${
+                    isCheapest ? "border-accent bg-accent/10 border-2" : "border-border bg-card/50"
                   }`}
                 >
                   {isCheapest && (
-                    <Badge className="absolute -top-2.5 bg-accent text-accent-foreground text-xs px-2 py-0.5 sm:text-sm sm:px-3">
+                    <Badge className="absolute -top-2 bg-accent text-accent-foreground text-[10px] px-1.5 py-0 sm:text-xs sm:px-2">
                       BEST
                     </Badge>
                   )}
-                  <span className="text-xs text-muted-foreground sm:text-sm lg:text-lg">
+                  <span className="text-[10px] text-muted-foreground sm:text-xs">
                     {formatTime(period.start_time_dublin)}
                   </span>
-                  <span className="text-xl font-bold tabular-nums text-foreground sm:text-3xl lg:text-5xl">
+                  <span className="text-base font-bold tabular-nums text-foreground sm:text-xl lg:text-2xl">
                     {Math.abs(period.price_eur_mwh).toFixed(0)}
                   </span>
-                  <span className="text-xs text-muted-foreground">€/MWh</span>
-                  <div className="mt-1 text-center">
-                    <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">
-                      {(period.price_eur_mwh / 1000).toFixed(4)}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">€/kWh</span>
-                  </div>
+                  <span className="text-[10px] text-muted-foreground">€/MWh</span>
                   <div
-                    className="mt-1.5 h-2 w-2 rounded-full sm:h-3 sm:w-3"
+                    className="mt-1 h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2"
                     style={{ backgroundColor: getPriceColor(period.price_eur_mwh, period.quintile as Quintile) }}
                   />
                 </div>
