@@ -9,15 +9,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  ReferenceLine,
-} from "recharts"
 import { Loader2, Wind, Zap, Activity, AlertTriangle, Gauge, Thermometer, Droplets, Cloud, Sun, CloudRain, CloudSun, CloudFog } from "lucide-react"
 
 interface WindDataPoint {
@@ -69,20 +60,6 @@ interface ScreenGridForecastProps {
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
-// Time-of-Use band definitions for Ireland
-const getTimeOfUseBand = (hour: number): { band: string; color: string; bgColor: string } => {
-  if (hour >= 23 || hour < 8) {
-    return { band: "Night", color: "var(--q1-cheap)", bgColor: "var(--q1-cheap)" }
-  }
-  if (hour >= 17 && hour < 19) {
-    return { band: "Peak", color: "var(--q5-expensive)", bgColor: "var(--q5-expensive)" }
-  }
-  if ((hour >= 8 && hour < 9) || (hour >= 19 && hour < 23)) {
-    return { band: "Off-Peak", color: "var(--q2-below)", bgColor: "var(--q2-below)" }
-  }
-  return { band: "Day", color: "var(--q3-average)", bgColor: "var(--q3-average)" }
-}
-
 // Wind direction to cardinal direction
 const getWindDirection = (degrees: number): string => {
   const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -102,15 +79,10 @@ const getWeatherInfo = (code: number): { icon: typeof Sun; description: string }
 }
 
 export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastProps) {
-  const [mounted, setMounted] = useState(false)
   const [lastValidWindData, setLastValidWindData] = useState<WindDataPoint[]>([])
   const [lastValidGridStatus, setLastValidGridStatus] = useState<GridStatus | null>(null)
   const [lastWindDataTime, setLastWindDataTime] = useState<string | null>(null)
   const [lastGridDataTime, setLastGridDataTime] = useState<string | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const { data, isLoading } = useSWR<ApiResponse>("/api/eirgrid", fetcher, {
     refreshInterval: 30000, // Poll every 30 seconds
@@ -134,15 +106,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
   const displayGridStatus = data?.hasGridData ? data.gridStatus : lastValidGridStatus
   const isGridError = data?.gridError && !data?.hasGridData
 
-  // Get current hour in Dublin
-  const currentHour = useMemo(() => {
-    const now = new Date()
-    return parseInt(
-      now.toLocaleString("en-IE", { hour: "2-digit", hour12: false, timeZone: "Europe/Dublin" })
-    )
-  }, [])
-
-
 
   // Get current wind data
   const currentWindData = useMemo(() => {
@@ -165,70 +128,6 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
       return windHour === currentHourStr
     }) || displayWindData[displayWindData.length - 1]
   }, [displayWindData])
-
-  // Process wind data for chart
-  const chartData = useMemo(() => {
-    if (!displayWindData.length) return []
-
-    return displayWindData.map((point, idx) => {
-      const date = new Date(point.timestamp)
-      const hour = date.getHours()
-      const band = getTimeOfUseBand(hour)
-
-      return {
-        idx, // unique index for each data point
-        time: date.toLocaleTimeString("en-IE", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Dublin",
-        }),
-        fullTime: date.toLocaleString("en-IE", {
-          day: "2-digit",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Dublin",
-        }),
-        windSpeed: point.windSpeed,
-        windGusts: point.windGusts,
-        windDirection: point.windDirection,
-        hour,
-        band: band.band,
-        bandColor: band.color,
-        timestamp: point.timestamp, // keep original timestamp
-      }
-    })
-  }, [displayWindData])
-
-  // Find the current hour index in displayWindData (for NOW reference line)
-  const currentHourIndex = useMemo(() => {
-    if (!displayWindData.length) return -1
-    const now = new Date()
-    const nowHour = now.toLocaleString("en-IE", {
-      year: "numeric",
-      month: "2-digit", 
-      day: "2-digit",
-      hour: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Dublin",
-    })
-    // Find the index of the current hour in the data
-    const idx = displayWindData.findIndex(d => {
-      const dataHour = new Date(d.timestamp).toLocaleString("en-IE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit", 
-        hour: "2-digit",
-        hour12: false,
-        timeZone: "Europe/Dublin",
-      })
-      return dataHour === nowHour
-    })
-    return idx
-  }, [displayWindData])
-  
 
   
   // Format last data time for display
@@ -465,19 +364,19 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
         </div>
       </TooltipProvider>
 
-      {/* 24-Hour Weather Forecast */}
-      <Card>
+      {/* 12-Hour Weather & Wind Forecast */}
+      <Card className="flex-1">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm sm:text-base flex items-center gap-2">
             <Thermometer className="h-4 w-4" />
-            24-Hour Weather Forecast (Dublin)
+            12-Hour Weather & Wind Forecast (Dublin)
           </CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-4">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {data?.hourlyWeather ? (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-12 sm:gap-3">
+            {data?.hourlyWeather && displayWindData.length > 0 ? (
               (() => {
-                // Filter to show next 24 hours starting from current hour
+                // Filter to show next 12 hours starting from current hour
                 const now = new Date()
                 const currentHourTimestamp = new Date(
                   now.getFullYear(),
@@ -486,11 +385,11 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                   now.getHours()
                 ).getTime()
                 
-                const next24Hours = data.hourlyWeather
+                const next12Hours = data.hourlyWeather
                   .filter(h => new Date(h.timestamp).getTime() >= currentHourTimestamp)
-                  .slice(0, 24)
+                  .slice(0, 12)
                 
-                return next24Hours.map((hour, idx) => {
+                return next12Hours.map((hour, idx) => {
                   const date = new Date(hour.timestamp)
                   const hourStr = date.toLocaleTimeString("en-IE", {
                     hour: "2-digit",
@@ -498,171 +397,64 @@ export function ScreenGridForecast({ currentPeriodIndex }: ScreenGridForecastPro
                     timeZone: "Europe/Dublin",
                   })
                   const WeatherIcon = getWeatherInfo(hour.weatherCode).icon
+                  const weatherDesc = getWeatherInfo(hour.weatherCode).description
                   const isNow = idx === 0
+                  
+                  // Find matching wind data for this hour
+                  const windPoint = displayWindData.find(w => {
+                    const windDate = new Date(w.timestamp)
+                    return windDate.getHours() === date.getHours() && 
+                           windDate.getDate() === date.getDate()
+                  })
                   
                   return (
                     <div
                       key={hour.timestamp}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-lg min-w-[60px] ${
-                        isNow ? "bg-primary/10 border border-primary" : "bg-muted/30"
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl ${
+                        isNow ? "bg-primary/10 border-2 border-primary" : "bg-muted/30 border border-border"
                       }`}
                     >
-                      <span className={`text-xs font-medium ${isNow ? "text-primary" : "text-muted-foreground"}`}>
+                      <span className={`text-xs font-semibold ${isNow ? "text-primary" : "text-muted-foreground"}`}>
                         {isNow ? "Now" : hourStr}
                       </span>
-                      <WeatherIcon className={`h-5 w-5 ${isNow ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="text-sm font-bold">{Math.round(hour.temperature)}°</span>
-                      {hour.precipitation > 0 && (
-                        <span className="text-xs text-blue-500">{hour.precipitation.toFixed(1)}mm</span>
+                      <WeatherIcon className={`h-6 w-6 sm:h-7 sm:w-7 ${isNow ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-base sm:text-lg font-bold">{Math.round(hour.temperature)}°C</span>
+                      
+                      {/* Wind Speed & Gusts */}
+                      {windPoint && (
+                        <div className="flex flex-col items-center gap-1 mt-1 pt-2 border-t border-border/50 w-full">
+                          <div className="flex items-center gap-1">
+                            <Wind className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-sm font-bold">{Math.round(windPoint.windSpeed)}</span>
+                            <span className="text-[10px] text-muted-foreground">km/h</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Gust: {Math.round(windPoint.windGusts)} km/h
+                          </div>
+                        </div>
                       )}
-                      <span className="text-xs text-muted-foreground">{hour.cloudCover}%</span>
+                      
+                      {hour.precipitation > 0 && (
+                        <div className="text-xs text-blue-500 font-medium">
+                          {hour.precipitation.toFixed(1)} mm
+                        </div>
+                      )}
                     </div>
                   )
                 })
               })()
             ) : (
-              <div className="flex items-center justify-center w-full py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             )}
           </div>
           
           {/* Legend */}
-          <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
-            <span>Temperature (°C)</span>
-            <span className="text-blue-500">Precipitation (mm)</span>
-            <span>Cloud Cover (%)</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Wind Speed Forecast Chart */}
-      <Card className="flex-1 min-h-0 flex flex-col">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-            <Wind className="h-4 w-4" />
-            Wind Speed Forecast (Dublin)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 p-2 sm:p-4">
-          <div className="w-full h-[250px] sm:h-[300px] lg:h-[350px] relative">
-            {mounted && chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                  <defs>
-                    <linearGradient id="windSpeedGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--q1-cheap)" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="var(--q1-cheap)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="windGustsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--q4-above)" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="var(--q4-above)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-
-                  <XAxis
-                    dataKey="idx"
-                    tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
-                    axisLine={{ stroke: "var(--border)" }}
-                    tickLine={false}
-                    interval={7}
-                    tickFormatter={(idx) => chartData[idx]?.time ?? ""}
-                  />
-
-                  <YAxis
-                    tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
-                    axisLine={{ stroke: "var(--border)" }}
-                    tickLine={false}
-                    tickFormatter={(v) => `${Math.round(v)}`}
-                    width={35}
-                    label={{
-                      value: "km/h",
-                      angle: -90,
-                      position: "insideLeft",
-                      style: { fontSize: 10, fill: "var(--muted-foreground)" },
-                    }}
-                  />
-
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.[0]) return null
-                      const data = payload[0].payload
-                      return (
-                        <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-xl">
-                          <p className="text-sm font-bold text-foreground">{data.fullTime}</p>
-                          <div
-                            className="text-xs px-2 py-0.5 rounded-full mt-1 mb-2 inline-block text-white"
-                            style={{ backgroundColor: data.bandColor }}
-                          >
-                            {data.band}
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-4">
-                              <span className="text-xs" style={{ color: "var(--q1-cheap)" }}>
-                                Wind:
-                              </span>
-                              <span className="text-xs font-bold">
-                                {Math.round(data.windSpeed)} km/h {getWindDirection(data.windDirection)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-4">
-                              <span className="text-xs" style={{ color: "var(--q4-above)" }}>
-                                Gusts:
-                              </span>
-                              <span className="text-xs font-bold">
-                                {Math.round(data.windGusts)} km/h
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    }}
-                  />
-
-                  {/* Wind gusts - background area */}
-                  <Area
-                    type="monotone"
-                    dataKey="windGusts"
-                    stroke="var(--q4-above)"
-                    strokeWidth={1}
-                    strokeDasharray="3 3"
-                    fill="url(#windGustsGradient)"
-                    name="Gusts"
-                  />
-
-                  {/* Wind speed - main area */}
-                  <Area
-                    type="monotone"
-                    dataKey="windSpeed"
-                    stroke="var(--q1-cheap)"
-                    strokeWidth={2}
-                    fill="url(#windSpeedGradient)"
-                    name="Wind Speed"
-                  />
-
-                  {/* NOW reference line - rendered last so it appears on top */}
-                  {currentHourIndex >= 0 && (
-                    <ReferenceLine
-                      x={currentHourIndex}
-                      stroke="white"
-                      strokeWidth={2}
-                      strokeDasharray="6 3"
-                      label={{
-                        value: "NOW",
-                        position: "top",
-                        fill: "white",
-                        fontSize: 11,
-                        fontWeight: "bold",
-                      }}
-                    />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            )}
+          <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Thermometer className="h-3 w-3" /> Temperature (°C)</span>
+            <span className="flex items-center gap-1"><Wind className="h-3 w-3" /> Wind Speed (km/h)</span>
+            <span className="flex items-center gap-1 text-blue-500"><Droplets className="h-3 w-3" /> Precipitation (mm)</span>
           </div>
         </CardContent>
       </Card>
