@@ -216,8 +216,8 @@ export function ScreenPriceStatistics({
         </Card>
       </div>
 
-      {/* Stats Row - Flattened */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+      {/* Stats Row - Inline */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:gap-4">
         {[
           { icon: TrendingDown, label: "Daily Min", value: `€${Math.abs(currentPrice.daily_min).toFixed(1)}`, color: "text-primary" },
           { icon: TrendingUp, label: "Daily Max", value: `€${Math.abs(currentPrice.daily_max).toFixed(1)}`, color: "text-destructive" },
@@ -225,12 +225,14 @@ export function ScreenPriceStatistics({
           { icon: Clock, label: "Next Change", value: countdown, color: "text-accent", mono: true },
         ].map(({ icon: Icon, label, value, color, mono }) => (
           <Card key={label} className="bg-card/50">
-            <CardContent className="flex flex-col items-center justify-center p-1.5 sm:p-2 lg:p-3">
-              <Icon className={`h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 mb-0.5 ${color}`} />
-              <span className="text-[10px] text-muted-foreground sm:text-xs">{label}</span>
-              <span className={`text-xs font-bold tabular-nums text-foreground sm:text-base lg:text-xl ${mono ? "font-mono" : ""}`}>
-                {value}
-              </span>
+            <CardContent className="flex items-center gap-2 p-2 sm:p-3 lg:p-4">
+              <Icon className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${color}`} />
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <span className="text-xs text-muted-foreground sm:text-sm whitespace-nowrap">{label}:</span>
+                <span className={`text-sm font-bold tabular-nums text-foreground sm:text-base lg:text-lg truncate ${mono ? "font-mono" : ""}`}>
+                  {value}
+                </span>
+              </div>
             </CardContent>
           </Card>
         ))}

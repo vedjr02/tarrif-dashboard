@@ -71,12 +71,17 @@ export function ScreenPriceAnalysis({
   const [mounted, setMounted] = useState(false)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set())
   const [tariffTypeFilter, setTariffTypeFilter] = useState<"all" | "dynamic" | "fixed">("all")
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
 
   // Load saved tariff selections from localStorage on mount
   useEffect(() => {
     setMounted(true)
     const saved = localStorage.getItem("adflex-selected-tariffs")
     const savedFilter = localStorage.getItem("adflex-tariff-filter")
+    
+    if (savedFilter && ["all", "dynamic", "fixed"].includes(savedFilter)) {
+      setTariffTypeFilter(savedFilter as "all" | "dynamic" | "fixed")
+    }
     
     if (saved) {
       try {
@@ -91,9 +96,8 @@ export function ScreenPriceAnalysis({
       setSelectedTariffs(new Set(RETAIL_TARIFFS.map(t => t.id)))
     }
     
-    if (savedFilter && ["all", "dynamic", "fixed"].includes(savedFilter)) {
-      setTariffTypeFilter(savedFilter as "all" | "dynamic" | "fixed")
-    }
+    // Mark initial load as complete after a tick to avoid triggering the filter effect
+    setTimeout(() => setInitialLoadComplete(true), 0)
   }, [])
 
   // Save tariff selections to localStorage when they change
@@ -146,11 +150,11 @@ export function ScreenPriceAnalysis({
     return RETAIL_TARIFFS.filter(t => t.type !== "flat") // dynamic
   }, [tariffTypeFilter])
 
-  // Update selectedTariffs when filter changes - select all tariffs of the filtered type
+  // Update selectedTariffs when filter changes - but only after initial load
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || !initialLoadComplete) return
     setSelectedTariffs(new Set(filteredTariffs.map(t => t.id)))
-  }, [tariffTypeFilter, filteredTariffs, mounted])
+  }, [tariffTypeFilter, filteredTariffs, mounted, initialLoadComplete])
 
   // Group tariffs by supplier for dropdown
   const tariffsBySupplier = useMemo(() => {
