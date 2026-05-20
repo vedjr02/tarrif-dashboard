@@ -79,7 +79,7 @@ export function ScreenPriceAnalysis({
   backendStatus,
 }: ScreenPriceAnalysisProps) {
   const { resolvedTheme } = useTheme()
-  const [dayView, setDayView] = useState<DayView>("today")
+  const [dayView, setDayView] = useState<DayView>(() => todayPrices ? "today" : "yesterday")
   const [mounted, setMounted] = useState(false)
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(() => {
     // Initialize from localStorage if available (client-side only)
