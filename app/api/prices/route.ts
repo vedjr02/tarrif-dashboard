@@ -243,53 +243,36 @@ function parseSemoCsv(csvContent: string): number[] | null {
 // Fetch real DAM prices from SEMO for a specific date
 async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null> {
   try {
-    // Search recent reports — date_from/to filters by publish date, not delivery date,
-    // so we fetch the 30 most recent and match by DateRetention (= delivery day)
-    const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=MarketResult_SEM-DA&page_size=30&sort_by=PublishTime%20desc`
-    
+    // semopx.com is the correct domain (sem-o.com only has 2025 data).
+    // The API PublishTime = midnight D+2, so today/tomorrow reports are not yet indexed.
+    // We match by the Date field (delivery day) which is D+1 = the actual trading day.
+    const searchUrl = `https://reports.semopx.com/api/v1/documents/static-reports?name=MarketResult_SEM-DA&group=Market+Data&page_size=10&sort_by=PublishTime&order_by=DESC`
+
     const searchResponse = await fetch(searchUrl, {
       headers: { "Accept": "application/json" },
       next: { revalidate: 300 },
     })
-    
+
     if (!searchResponse.ok) {
       return null
     }
-    
+
     const searchData = await searchResponse.json()
-    
+
     if (!searchData.items || searchData.items.length === 0) {
       return null
     }
-    
-    // Find report for the specific trading day
-    // Report format: MarketResult_SEM-DA_PWR-MRC-D+1_YYYYMMDDHHMMSS_...
-    // The DateRetention field should match the delivery day
-    const targetDate = tradingDay.replace(/-/g, '')
-    
-    // Look for report with matching date
-    let selectedReport = null
-    for (const report of searchData.items) {
-      // Check DateRetention field which indicates the delivery date
-      const retentionDate = report.DateRetention?.replace(/-/g, '') || ''
-      if (retentionDate.startsWith(targetDate)) {
-        selectedReport = report
-        break
-      }
-      
-      // Also check if the filename contains the date
-      const resourceName = report.ResourceName || ''
-      if (resourceName.includes(targetDate.substring(0, 8))) {
-        selectedReport = report
-        break
-      }
-    }
-    
+
+    // Match by Date field (= delivery/trading day, format "YYYY-MM-DDT10:00:00")
+    const selectedReport = searchData.items.find(
+      (report: { Date?: string }) => report.Date?.startsWith(tradingDay)
+    ) ?? null
+
     if (!selectedReport) {
       return null
     }
-    
-    const csvUrl = `https://reports.sem-o.com/documents/${selectedReport.ResourceName}`
+
+    const csvUrl = `https://reports.semopx.com/documents/${selectedReport.ResourceName}`
     
     const csvResponse = await fetch(csvUrl, { next: { revalidate: 300 } })
     if (!csvResponse.ok) {

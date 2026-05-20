@@ -338,7 +338,7 @@ export function ScreenPriceAnalysis({
       {dayView === "tomorrow" && !tomorrowIsRealData && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>Tomorrow&apos;s prices are not available yet. They are usually published around 13:00 Dublin time. Showing estimated prices.</span>
+          <span>Tomorrow&apos;s real prices are not available yet. The Day-Ahead Market auction runs at 10:00, but results only appear in the data feed at midnight. Showing estimated prices.</span>
         </div>
       )}
 
