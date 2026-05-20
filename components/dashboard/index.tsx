@@ -247,7 +247,6 @@ export function Dashboard() {
               yesterdayPrices={yesterdayPrices}
               yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
-              tomorrowIsRealData={data?.tomorrowIsRealData ?? false}
               backendStatus={backendStatus}
             />
           )}

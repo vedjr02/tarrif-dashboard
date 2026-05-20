@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useTheme } from "next-themes"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,9 +23,8 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from "recharts"
-import { ChevronDown, Loader2, Clock } from "lucide-react"
-import type { DayPrices, DayTariffs, Quintile, BackendStatus } from "@/lib/types"
-import { getPriceColor } from "@/lib/types"
+import { ChevronDown, Loader2 } from "lucide-react"
+import type { DayPrices, DayTariffs, BackendStatus } from "@/lib/types"
 import { 
   RETAIL_TARIFFS, 
   getTariffRateForHour, 
@@ -58,7 +57,6 @@ interface ScreenPriceAnalysisProps {
   yesterdayPrices: DayPrices | null
   yesterdayTariffs?: DayTariffs | null
   currentPeriodIndex: number
-  tomorrowIsRealData?: boolean
   backendStatus?: BackendStatus | null
 }
 
@@ -75,7 +73,6 @@ export function ScreenPriceAnalysis({
   tomorrowPrices,
   yesterdayPrices,
   currentPeriodIndex,
-  tomorrowIsRealData = false,
   backendStatus,
 }: ScreenPriceAnalysisProps) {
   const { resolvedTheme } = useTheme()
@@ -311,7 +308,6 @@ export function ScreenPriceAnalysis({
             variant={dayView === "yesterday" ? "default" : "ghost"}
             size="sm"
             onClick={() => setDayView("yesterday")}
-            disabled={!yesterdayPrices}
             className="h-7 text-xs flex flex-col items-center gap-0 leading-none py-1"
           >
             Yesterday
@@ -330,7 +326,6 @@ export function ScreenPriceAnalysis({
             variant={dayView === "tomorrow" ? "default" : "ghost"}
             size="sm"
             onClick={() => setDayView("tomorrow")}
-            disabled={!tomorrowPrices}
             className="h-7 text-xs flex flex-col items-center gap-0 leading-none py-1"
           >
             Tomorrow
@@ -338,20 +333,6 @@ export function ScreenPriceAnalysis({
           </Button>
         </div>
       </div>
-
-      {/* DAM data unavailability banners */}
-      {dayView === "today" && !todayPrices && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
-          <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>DAM wholesale line not available for today — SEMO PX publishes today&apos;s results at midnight. Configure <strong>ENTSOE_API_TOKEN</strong> for real-time data. Retail tariffs are shown.</span>
-        </div>
-      )}
-      {dayView === "tomorrow" && !tomorrowPrices && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
-          <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>DAM wholesale line not available for tomorrow — configure <strong>ENTSOE_API_TOKEN</strong> to fetch post-auction prices (~13:00 today). Retail tariffs are shown.</span>
-        </div>
-      )}
 
       {/* Controls: Tariff Selector + Type Filter + Stats */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -467,7 +448,14 @@ export function ScreenPriceAnalysis({
       {/* Chart */}
       <Card className="overflow-hidden flex flex-col flex-1 min-h-0">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base sm:text-lg">DAM Wholesale vs Retail Tariffs</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base sm:text-lg">DAM Wholesale vs Retail Tariffs</CardTitle>
+            {!selectedPrices && (
+              <span className="text-[10px] text-muted-foreground border border-border rounded-full px-2 py-0.5 whitespace-nowrap">
+                DAM unavailable · retail tariffs only
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-2 sm:p-4">
           <div className="w-full" style={{ height: '400px' }}>
@@ -594,8 +582,8 @@ export function ScreenPriceAnalysis({
                   )}
 
                   {/* Retail tariff lines — always shown */}
-                  {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, idx) => {
-                    const color = getTariffColor(tariff, idx)
+                  {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, i) => {
+                    const color = getTariffColor(tariff, i)
                     const isFlat = tariff.type === "flat"
                     return (
                       <Line
