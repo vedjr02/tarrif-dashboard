@@ -11,14 +11,14 @@ import { ScreenGridForecast } from "./screens/screen-grid-forecast"
 import type { DayPrices, CurrentPrice, BackendStatus, DayTariffs, CurrentTariff } from "@/lib/types"
 
 interface PricesApiResponse {
-  todayPrices: DayPrices
+  todayPrices: DayPrices | null
   tomorrowPrices: DayPrices | null
-  yesterdayPrices: DayPrices
-  todayTariffs: DayTariffs
+  yesterdayPrices: DayPrices | null
+  todayTariffs: DayTariffs | null
   tomorrowTariffs: DayTariffs | null
-  yesterdayTariffs: DayTariffs
-  currentPrice: CurrentPrice
-  currentTariff: CurrentTariff
+  yesterdayTariffs: DayTariffs | null
+  currentPrice: CurrentPrice | null
+  currentTariff: CurrentTariff | null
   currentPeriodIndex: number
   tomorrowIsRealData: boolean
   backendStatus: BackendStatus
@@ -67,6 +67,7 @@ export function Dashboard() {
   const currentPrice = data?.currentPrice ?? null
   const currentTariff = data?.currentTariff ?? null
   const backendStatus = data?.backendStatus ?? null
+  const currentPeriodIndexFromApi = data?.currentPeriodIndex ?? 0
 
   // Update current period index every 30s using Dublin timezone
   useEffect(() => {
@@ -146,8 +147,8 @@ export function Dashboard() {
   const nextScreen = () => goToScreen((currentScreen + 1) % SCREENS.length)
   const prevScreen = () => goToScreen((currentScreen - 1 + SCREENS.length) % SCREENS.length)
 
-  // Loading state
-  if (isLoading || !todayPrices || !currentPrice || !yesterdayPrices || !backendStatus || !todayTariffs || !currentTariff) {
+  // Loading state — only block on backendStatus, which is always returned
+  if (isLoading || !backendStatus) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -174,7 +175,7 @@ export function Dashboard() {
     )
   }
 
-  const previousPeriod = currentPeriodIndex > 0 ? todayPrices.periods[currentPeriodIndex - 1] : undefined
+  const previousPeriod = (currentPeriodIndex > 0 && todayPrices) ? todayPrices.periods[currentPeriodIndex - 1] : undefined
 
   // Determine backend status for header
   const timeSinceLastScrape = Date.now() - new Date(backendStatus.last_scrape).getTime()

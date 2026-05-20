@@ -51,7 +51,7 @@ const getTimeOfUseBand = (hour: number): { band: string; color: string } => {
 }
 
 interface ScreenPriceAnalysisProps {
-  todayPrices: DayPrices
+  todayPrices: DayPrices | null
   todayTariffs?: DayTariffs | null
   tomorrowPrices: DayPrices | null
   tomorrowTariffs?: DayTariffs | null
@@ -347,11 +347,17 @@ export function ScreenPriceAnalysis({
         </div>
       </div>
 
-      {/* Tomorrow not available yet banner */}
+      {/* Data unavailability banners */}
+      {dayView === "today" && !todayPrices && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span>Today&apos;s prices could not be retrieved. SEMO PX publishes today&apos;s data at midnight — try again shortly or check the data source status.</span>
+        </div>
+      )}
       {dayView === "tomorrow" && !tomorrowIsRealData && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>Tomorrow&apos;s real prices are not available yet. The Day-Ahead Market auction runs at 10:00, but results only appear in the data feed at midnight. Showing estimated prices.</span>
+          <span>Tomorrow&apos;s real prices are not available yet. ENTSO-E publishes them around 13:00 following the Day-Ahead auction.</span>
         </div>
       )}
 
@@ -607,6 +613,17 @@ export function ScreenPriceAnalysis({
                   })}
                 </ComposedChart>
               </ResponsiveContainer>
+            ) : mounted && !selectedPrices ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+                <p className="text-base font-semibold text-muted-foreground">No price data available</p>
+                <p className="text-sm text-muted-foreground/60">
+                  {dayView === "today"
+                    ? "Today's prices could not be retrieved from ENTSO-E or SEMO PX."
+                    : dayView === "tomorrow"
+                    ? "Tomorrow's prices are not yet published."
+                    : "Yesterday's prices could not be retrieved."}
+                </p>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

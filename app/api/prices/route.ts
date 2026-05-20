@@ -324,43 +324,6 @@ function convertToPeriods(tradingDay: string, hourlyPrices: number[], source: "S
   return periods
 }
 
-// Generate realistic fallback prices
-function generateRealisticPrices(tradingDay: string): PricePeriod[] {
-  const date = new Date(tradingDay)
-  const dayOfWeek = date.getDay()
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-  const month = date.getMonth()
-  
-  const seasonalFactor = month >= 10 || month <= 2 ? 1.3 : month >= 5 && month <= 8 ? 0.8 : 1.0
-  const weekdayFactor = isWeekend ? 0.75 : 1.0
-  
-  // Use date as seed for consistent prices for same day
-  const seed = date.getTime()
-  const seededRandom = (index: number) => {
-    const x = Math.sin(seed + index * 1000) * 10000
-    return x - Math.floor(x)
-  }
-
-  // Typical Irish DAM price profile
-  const baseProfile = [
-    52, 48, 45, 42, 40, 38, 36, 35, 34, 33, 33, 34,
-    38, 45, 58, 72, 85, 95, 105, 115,
-    120, 118, 112, 105, 98, 92, 88, 85, 82, 80, 78, 76,
-    82, 95, 115, 135, 155, 168, 175, 172, 158, 142,
-    125, 105, 88, 72, 62, 55
-  ]
-
-  const hourlyPrices: number[] = []
-  for (let i = 0; i < 24; i++) {
-    const idx = i * 2
-    const basePrice = (baseProfile[idx] + baseProfile[idx + 1]) / 2
-    const randomVariation = (seededRandom(i) - 0.5) * 25
-    hourlyPrices.push(Math.max(15, Math.min(300, basePrice * seasonalFactor * weekdayFactor + randomVariation)))
-  }
-
-  return convertToPeriods(tradingDay, hourlyPrices, "Interpolated")
-}
-
 // Build DayPrices object
 function buildDayPrices(tradingDay: string, periods: PricePeriod[]): DayPrices {
   const date = new Date(tradingDay)
@@ -404,18 +367,11 @@ export async function GET() {
     const tomorrowStr = getDublinDate(1)
     const yesterdayStr = getDublinDate(-1)
 
-    // Fetch prices: try ENTSO-E first, then SEMO, then fallback
-    const fetchPricesForDay = async (day: string): Promise<PricePeriod[]> => {
-      // Try ENTSO-E first (needs API token)
+    // Fetch prices: try ENTSO-E first, then SEMO — no fake fallback
+    const fetchPricesForDay = async (day: string): Promise<PricePeriod[] | null> => {
       const entsoePrices = await fetchEntsoePrices(day)
       if (entsoePrices) return entsoePrices
-      
-      // Try SEMO
-      const semoPrices = await fetchSemoPrices(day)
-      if (semoPrices) return semoPrices
-      
-      // Fallback to generated prices
-      return generateRealisticPrices(day)
+      return fetchSemoPrices(day)
     }
 
     const [todayPeriods, tomorrowPeriods, yesterdayPeriods] = await Promise.all([
@@ -423,36 +379,37 @@ export async function GET() {
       fetchPricesForDay(tomorrowStr),
       fetchPricesForDay(yesterdayStr),
     ])
-    
-    // Build response
-    const todayPrices = buildDayPrices(todayStr, todayPeriods)
-    const tomorrowPrices = buildDayPrices(tomorrowStr, tomorrowPeriods)
-    const yesterdayPrices = buildDayPrices(yesterdayStr, yesterdayPeriods)
-    
-    const todayTariffs = buildDayTariffs(todayPrices)
-    const tomorrowTariffs = buildDayTariffs(tomorrowPrices)
-    const yesterdayTariffs = buildDayTariffs(yesterdayPrices)
-    
+
+    // Build response — null when no real data available
+    const todayPrices = todayPeriods ? buildDayPrices(todayStr, todayPeriods) : null
+    const tomorrowPrices = tomorrowPeriods ? buildDayPrices(tomorrowStr, tomorrowPeriods) : null
+    const yesterdayPrices = yesterdayPeriods ? buildDayPrices(yesterdayStr, yesterdayPeriods) : null
+
+    const todayTariffs = todayPrices ? buildDayTariffs(todayPrices) : null
+    const tomorrowTariffs = tomorrowPrices ? buildDayTariffs(tomorrowPrices) : null
+    const yesterdayTariffs = yesterdayPrices ? buildDayTariffs(yesterdayPrices) : null
+
     // Calculate current period
     const now = new Date()
     const dublinHour = parseInt(now.toLocaleTimeString("en-IE", { hour: "2-digit", hour12: false, timeZone: "Europe/Dublin" }))
     const dublinMinute = now.getMinutes()
     const currentPeriodIndex = dublinHour * 2 + (dublinMinute >= 30 ? 1 : 0)
-    
-    const currentPeriod = todayPrices.periods[Math.min(currentPeriodIndex, 47)]
-    const prices = todayPrices.periods.map(p => p.price_eur_mwh)
-    
-    const currentPrice = {
-      ...currentPeriod,
-      daily_avg: Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100,
-      daily_min: Math.min(...prices),
-      daily_max: Math.max(...prices),
-    }
-    
+
+    const currentPrice = todayPrices ? (() => {
+      const period = todayPrices.periods[Math.min(currentPeriodIndex, 47)]
+      const prices = todayPrices.periods.map(p => p.price_eur_mwh)
+      return {
+        ...period,
+        daily_avg: Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100,
+        daily_min: Math.min(...prices),
+        daily_max: Math.max(...prices),
+      }
+    })() : null
+
     // Current tariff
-    const currentTariffPeriod = todayTariffs.periods[Math.min(currentPeriodIndex, 47)]
-    const tariffs = todayTariffs.periods.map(p => p.tariff_inc_vat_eur_kwh)
-    const daily_avg_tariff = tariffs.reduce((a, b) => a + b, 0) / tariffs.length
+    const currentTariffPeriod = todayTariffs?.periods[Math.min(currentPeriodIndex, 47)] ?? null
+    const tariffs = todayTariffs?.periods.map(p => p.tariff_inc_vat_eur_kwh) ?? []
+    const daily_avg_tariff = tariffs.length > 0 ? tariffs.reduce((a, b) => a + b, 0) / tariffs.length : 0
     
     const signalMap: Record<number, "CHEAP" | "BELOW_AVERAGE" | "AVERAGE" | "ABOVE_AVERAGE" | "EXPENSIVE"> = {
       1: "CHEAP",
@@ -462,39 +419,43 @@ export async function GET() {
       5: "EXPENSIVE",
     }
     
-    const currentTariff = {
+    const currentTariff = currentTariffPeriod && todayTariffs ? {
       ...currentTariffPeriod,
       daily_avg: Math.round(daily_avg_tariff * 10000) / 10000,
-      daily_min: Math.min(...tariffs),
-      daily_max: Math.max(...tariffs),
-      signal: signalMap[currentTariffPeriod.quintile] || "AVERAGE",
+      daily_min: tariffs.length > 0 ? Math.min(...tariffs) : 0,
+      daily_max: tariffs.length > 0 ? Math.max(...tariffs) : 0,
+      signal: signalMap[currentTariffPeriod.quintile] ?? "AVERAGE",
       tariff_name: "Standard",
       next_periods: todayTariffs.periods.slice(Math.min(currentPeriodIndex + 1, 47), Math.min(currentPeriodIndex + 7, 48)),
       daily_avg_tariff_eur_kwh: Math.round(daily_avg_tariff * 10000) / 10000,
-      delta_vs_avg_pct: Math.round(((currentTariffPeriod.tariff_inc_vat_eur_kwh - daily_avg_tariff) / daily_avg_tariff) * 1000) / 10,
-    }
-    
+      delta_vs_avg_pct: daily_avg_tariff > 0
+        ? Math.round(((currentTariffPeriod.tariff_inc_vat_eur_kwh - daily_avg_tariff) / daily_avg_tariff) * 1000) / 10
+        : 0,
+    } : null
+
     // Determine data source
-    const sources = [...new Set([
-      ...todayPrices.periods.map(p => p.source),
-      ...tomorrowPrices.periods.map(p => p.source),
-      ...yesterdayPrices.periods.map(p => p.source),
-    ])]
-    
-    const primarySource = sources.includes("ENTSO-E") ? "ENTSO-E" : sources.includes("SEMOPX") ? "SEMOPX" : "Simulated"
-    
+    const allSources: string[] = [
+      ...(todayPrices?.periods.map(p => p.source) ?? []),
+      ...(tomorrowPrices?.periods.map(p => p.source) ?? []),
+      ...(yesterdayPrices?.periods.map(p => p.source) ?? []),
+    ]
+    const sources = [...new Set(allSources)]
+    const primarySource = sources.includes("ENTSO-E") ? "ENTSO-E" : sources.includes("SEMOPX") ? "SEMOPX" : "Unknown"
+
+    const missingDays = [todayPrices, tomorrowPrices, yesterdayPrices].filter(d => d === null).length
+
     // Backend status
     const backendStatus = {
       last_scrape: new Date().toISOString(),
       backend: "ok" as const,
-      missing_days: 0,
+      missing_days: missingDays,
       data_source: primarySource,
-      today_source: todayPrices.periods[0]?.source || "Unknown",
-      tomorrow_source: tomorrowPrices.periods[0]?.source || "Unknown",
-      yesterday_source: yesterdayPrices.periods[0]?.source || "Unknown",
+      today_source: todayPrices?.periods[0]?.source ?? "Unknown",
+      tomorrow_source: tomorrowPrices?.periods[0]?.source ?? "Unknown",
+      yesterday_source: yesterdayPrices?.periods[0]?.source ?? "Unknown",
     }
-    
-    const tomorrowIsRealData = tomorrowPrices.periods[0]?.source !== "Interpolated"
+
+    const tomorrowIsRealData = tomorrowPrices !== null && tomorrowPrices.periods[0]?.source !== "Interpolated"
 
     return NextResponse.json({
       todayPrices,

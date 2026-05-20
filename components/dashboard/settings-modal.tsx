@@ -14,13 +14,23 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bell, Mail, TrendingDown, TrendingUp, Clock } from "lucide-react"
-import type { DayPrices } from "@/lib/types"
-import { findCheapestWindow } from "@/lib/mock-data"
+import type { DayPrices, PricePeriod } from "@/lib/types"
+
+function findCheapestWindow(periods: PricePeriod[], windowSize: number): { start: number; avgPrice: number } {
+  if (periods.length < windowSize) return { start: 0, avgPrice: 0 }
+  let bestStart = 0
+  let bestAvg = Infinity
+  for (let i = 0; i <= periods.length - windowSize; i++) {
+    const avg = periods.slice(i, i + windowSize).reduce((s, p) => s + p.price_eur_mwh, 0) / windowSize
+    if (avg < bestAvg) { bestAvg = avg; bestStart = i }
+  }
+  return { start: bestStart, avgPrice: bestAvg }
+}
 
 interface SettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  dayPrices: DayPrices
+  dayPrices: DayPrices | null
 }
 
 export function SettingsModal({ open, onOpenChange, dayPrices }: SettingsModalProps) {
@@ -30,9 +40,9 @@ export function SettingsModal({ open, onOpenChange, dayPrices }: SettingsModalPr
   const [email, setEmail] = useState("")
 
   // Find cheapest 4-hour window
-  const cheapestWindow = findCheapestWindow(dayPrices.periods, 8) // 8 periods = 4 hours
-  const startPeriod = dayPrices.periods[cheapestWindow.start]
-  const endPeriod = dayPrices.periods[cheapestWindow.start + 7]
+  const cheapestWindow = dayPrices ? findCheapestWindow(dayPrices.periods, 8) : null
+  const startPeriod = dayPrices && cheapestWindow ? dayPrices.periods[cheapestWindow.start] : null
+  const endPeriod = dayPrices && cheapestWindow ? dayPrices.periods[cheapestWindow.start + 7] : null
 
   const formatTime = (isoString: string) => {
     const date = new Date(isoString)
@@ -140,16 +150,21 @@ export function SettingsModal({ open, onOpenChange, dayPrices }: SettingsModalPr
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-foreground">
-                Cheapest 4-hour window:{" "}
-                <span className="font-semibold text-primary">
-                  {startPeriod && formatTime(startPeriod.start_time_dublin)} –{" "}
-                  {endPeriod && formatTime(endPeriod.start_time_dublin)}
-                </span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Average price: €{cheapestWindow.avgPrice.toFixed(2)}/MWh
-              </p>
+              {cheapestWindow && startPeriod && endPeriod ? (
+                <>
+                  <p className="text-sm text-foreground">
+                    Cheapest 4-hour window:{" "}
+                    <span className="font-semibold text-primary">
+                      {formatTime(startPeriod.start_time_dublin)} – {formatTime(endPeriod.start_time_dublin)}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Average price: €{cheapestWindow.avgPrice.toFixed(2)}/MWh
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No price data available yet.</p>
+              )}
             </CardContent>
           </Card>
         </div>

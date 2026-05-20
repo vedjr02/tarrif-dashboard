@@ -8,11 +8,11 @@ import type { CurrentPrice, CurrentTariff, PricePeriod, DayPrices, DayTariffs, Q
 import { getQuintileColor, getPriceColor, QUINTILE_CONFIG } from "@/lib/types"
 
 interface ScreenPriceStatisticsProps {
-  currentPrice: CurrentPrice
-  currentTariff?: CurrentTariff
+  currentPrice: CurrentPrice | null
+  currentTariff?: CurrentTariff | null
   previousPeriod?: PricePeriod
-  dayPrices: DayPrices
-  dayTariffs?: DayTariffs
+  dayPrices: DayPrices | null
+  dayTariffs?: DayTariffs | null
   currentPeriodIndex: number
   dayView?: "today" | "tomorrow" | "yesterday"
 }
@@ -46,6 +46,21 @@ export function ScreenPriceStatistics({
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
   }, [])
+
+  if (!currentPrice || !dayPrices) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+        <Activity className="h-12 w-12 text-muted-foreground/40" />
+        <div>
+          <p className="text-lg font-semibold text-muted-foreground">Awaiting Real-Time Data</p>
+          <p className="text-sm text-muted-foreground/70 mt-1">
+            Today&apos;s prices are not yet available from ENTSO-E or SEMO PX.
+          </p>
+          <p className="text-xs text-muted-foreground/50 mt-2">Data is typically available by 13:00 for the following day.</p>
+        </div>
+      </div>
+    )
+  }
 
   const quintileConfig = QUINTILE_CONFIG[currentPrice.quintile as Quintile]
   const priceTrend = previousPeriod
