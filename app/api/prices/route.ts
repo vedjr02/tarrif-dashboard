@@ -509,6 +509,10 @@ export async function GET() {
       tomorrowIsRealData,
       backendStatus,
       fetchedAt: new Date().toISOString(),
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
     })
   } catch (error) {
     console.error("[v0] API error:", error)

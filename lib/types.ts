@@ -59,9 +59,10 @@ export interface BackendStatus {
   last_scrape: string
   backend: "ok" | "error"
   missing_days: number
-  semopx_periods: number
-  entsoe_periods: number
-  interpolated_periods: number
+  data_source: string
+  today_source: string
+  tomorrow_source: string
+  yesterday_source: string
 }
 
 export type Quintile = 1 | 2 | 3 | 4 | 5

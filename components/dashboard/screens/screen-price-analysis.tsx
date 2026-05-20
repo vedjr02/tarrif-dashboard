@@ -24,7 +24,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { ChevronDown, Loader2, Clock } from "lucide-react"
-import type { DayPrices, DayTariffs, Quintile } from "@/lib/types"
+import type { DayPrices, DayTariffs, Quintile, BackendStatus } from "@/lib/types"
 import { getPriceColor } from "@/lib/types"
 import { 
   RETAIL_TARIFFS, 
@@ -59,6 +59,15 @@ interface ScreenPriceAnalysisProps {
   yesterdayTariffs?: DayTariffs | null
   currentPeriodIndex: number
   tomorrowIsRealData?: boolean
+  backendStatus?: BackendStatus | null
+}
+
+function SourceBadge({ source }: { source?: string }) {
+  if (!source || source === "Unknown") return null
+  if (source === "SEMOPX" || source === "ENTSO-E") {
+    return <span className="text-[9px] font-medium text-primary leading-none">LIVE</span>
+  }
+  return <span className="text-[9px] font-medium text-amber-500 leading-none">Est.</span>
 }
 
 export function ScreenPriceAnalysis({
@@ -67,6 +76,7 @@ export function ScreenPriceAnalysis({
   yesterdayPrices,
   currentPeriodIndex,
   tomorrowIsRealData = false,
+  backendStatus,
 }: ScreenPriceAnalysisProps) {
   const { resolvedTheme } = useTheme()
   const [dayView, setDayView] = useState<DayView>("today")
@@ -310,26 +320,29 @@ export function ScreenPriceAnalysis({
             size="sm"
             onClick={() => setDayView("yesterday")}
             disabled={!yesterdayPrices}
-            className="h-7 text-xs"
+            className="h-7 text-xs flex flex-col items-center gap-0 leading-none py-1"
           >
             Yesterday
+            <SourceBadge source={backendStatus?.yesterday_source} />
           </Button>
           <Button
             variant={dayView === "today" ? "default" : "ghost"}
             size="sm"
             onClick={() => setDayView("today")}
-            className="h-7 text-xs"
+            className="h-7 text-xs flex flex-col items-center gap-0 leading-none py-1"
           >
             Today
+            <SourceBadge source={backendStatus?.today_source} />
           </Button>
           <Button
             variant={dayView === "tomorrow" ? "default" : "ghost"}
             size="sm"
             onClick={() => setDayView("tomorrow")}
             disabled={!tomorrowPrices}
-            className="h-7 text-xs"
+            className="h-7 text-xs flex flex-col items-center gap-0 leading-none py-1"
           >
             Tomorrow
+            <SourceBadge source={backendStatus?.tomorrow_source} />
           </Button>
         </div>
       </div>

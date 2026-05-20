@@ -225,6 +225,7 @@ export function Dashboard() {
               yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
               tomorrowIsRealData={data?.tomorrowIsRealData ?? false}
+              backendStatus={backendStatus}
             />
           )}
           {currentScreen === 2 && (
