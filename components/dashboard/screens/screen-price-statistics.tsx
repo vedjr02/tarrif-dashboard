@@ -15,16 +15,18 @@ interface ScreenPriceStatisticsProps {
   dayTariffs?: DayTariffs | null
   currentPeriodIndex: number
   dayView?: "today" | "tomorrow" | "yesterday"
+  todayUnavailable?: boolean
 }
 
-export function ScreenPriceStatistics({ 
-  currentPrice, 
-  currentTariff, 
+export function ScreenPriceStatistics({
+  currentPrice,
+  currentTariff,
   previousPeriod,
   dayPrices,
   dayTariffs,
   currentPeriodIndex,
   dayView = "today",
+  todayUnavailable = false,
 }: ScreenPriceStatisticsProps) {
   const [countdown, setCountdown] = useState("")
 
@@ -52,11 +54,8 @@ export function ScreenPriceStatistics({
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <Activity className="h-12 w-12 text-muted-foreground/40" />
         <div>
-          <p className="text-lg font-semibold text-muted-foreground">Awaiting Real-Time Data</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">
-            Today&apos;s prices are not yet available from ENTSO-E or SEMO PX.
-          </p>
-          <p className="text-xs text-muted-foreground/50 mt-2">Data is typically available by 13:00 for the following day.</p>
+          <p className="text-lg font-semibold text-muted-foreground">No Price Data Available</p>
+          <p className="text-sm text-muted-foreground/70 mt-1">Neither SEMO PX nor ENTSO-E returned data.</p>
         </div>
       </div>
     )
@@ -110,6 +109,14 @@ export function ScreenPriceStatistics({
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 sm:gap-5 sm:p-5 lg:gap-8 lg:p-8">
+
+      {/* Banner when falling back to yesterday */}
+      {todayUnavailable && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm text-amber-600">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span>Today&apos;s prices are not yet published — showing yesterday&apos;s profile as reference.</span>
+        </div>
+      )}
 
       {/* Top Section: Day Profile + Current Price */}
       <div className="grid grid-cols-1 gap-3 sm:gap-5 md:grid-cols-2">
@@ -294,7 +301,7 @@ export function ScreenPriceStatistics({
 
       {/* Attribution */}
       <div className="text-center text-xs text-muted-foreground sm:text-sm">
-        Data Source: Semo PX &middot; Period {currentPrice.period}/48 &middot; {currentPrice.source}
+        {todayUnavailable ? "Yesterday reference" : "Live"} &middot; {currentPrice.source} &middot; Period {currentPrice.period}/48
       </div>
     </div>
   )

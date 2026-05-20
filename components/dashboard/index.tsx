@@ -174,7 +174,28 @@ export function Dashboard() {
     )
   }
 
-  const previousPeriod = (currentPeriodIndex > 0 && todayPrices) ? todayPrices.periods[currentPeriodIndex - 1] : undefined
+  // When today's prices aren't available, fall back to yesterday for Screen 1
+  const todayUnavailable = !todayPrices
+  const screen1Prices = todayPrices ?? yesterdayPrices
+  const screen1Tariffs = todayTariffs ?? (data?.yesterdayTariffs ?? null)
+  const screen1DayView = todayPrices ? "today" : "yesterday"
+
+  // Derive a currentPrice from screen1Prices when today is unavailable
+  const screen1CurrentPrice = currentPrice ?? (() => {
+    if (!screen1Prices) return null
+    const period = screen1Prices.periods[Math.min(currentPeriodIndex, 47)]
+    const allPrices = screen1Prices.periods.map(p => p.price_eur_mwh)
+    return {
+      ...period,
+      daily_avg: Math.round((allPrices.reduce((a, b) => a + b, 0) / allPrices.length) * 100) / 100,
+      daily_min: Math.min(...allPrices),
+      daily_max: Math.max(...allPrices),
+    }
+  })()
+
+  const previousPeriod = (currentPeriodIndex > 0 && screen1Prices)
+    ? screen1Prices.periods[currentPeriodIndex - 1]
+    : undefined
 
   // Determine backend status for header
   const timeSinceLastScrape = Date.now() - new Date(backendStatus.last_scrape).getTime()
@@ -207,12 +228,14 @@ export function Dashboard() {
         <div className="h-full flex flex-col">
           {currentScreen === 0 && (
             <ScreenPriceStatistics
-              currentPrice={currentPrice}
+              currentPrice={screen1CurrentPrice}
               currentTariff={currentTariff}
               previousPeriod={previousPeriod}
-              dayPrices={todayPrices}
-              dayTariffs={todayTariffs}
+              dayPrices={screen1Prices}
+              dayTariffs={screen1Tariffs}
               currentPeriodIndex={currentPeriodIndex}
+              dayView={screen1DayView}
+              todayUnavailable={todayUnavailable}
             />
           )}
           {currentScreen === 1 && (
