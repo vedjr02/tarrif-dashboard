@@ -182,40 +182,30 @@ export function ScreenPriceAnalysis({
     return grouped
   }, [])
 
-  // Chart data: all values in c/kWh
-  // SEM wholesale = EUR/MWh / 10 = c/kWh
+  // Chart data: always 48 half-hourly slots; DAM price included when available
+  // All values in c/kWh (EUR/MWh ÷ 10)
   const chartData = useMemo(() => {
-    if (!selectedPrices?.periods) return []
-    
-    return selectedPrices.periods.map((period, idx) => {
-      const date = new Date(period.start_time_utc)
-      const hour = parseInt(
-        new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Dublin", hour: "numeric", hour12: false })
-          .format(date)
-      )
-      const semPriceEurMwh = period.price_eur_mwh
-      
-      // SEM wholesale in c/kWh
-      const semPriceCents = semPriceEurMwh / 10
-      
+    return Array.from({ length: 48 }, (_, i) => {
+      const hour = Math.floor(i / 2)
+      const minute = (i % 2) * 30
+      const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+
+      const damPeriod = selectedPrices?.periods[i]
+      const semPriceEurMwh = damPeriod?.price_eur_mwh ?? undefined
+      const semPrice = semPriceEurMwh !== undefined ? semPriceEurMwh / 10 : undefined
+
       const touBand = getTimeOfUseBand(hour)
-      const dataPoint: Record<string, number | string> = {
-        periodIdx: idx,
+      const dataPoint: Record<string, number | string | undefined> = {
+        periodIdx: i,
         hour,
-        time: date.toLocaleTimeString("en-IE", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Dublin",
-        }),
+        time,
         semPriceEurMwh,
-        semPrice: semPriceCents, // c/kWh
-        quintile: period.quintile,
+        semPrice,
+        quintile: damPeriod?.quintile ?? 3,
         touBand: touBand.band,
         touColor: touBand.color,
       }
 
-      // Add all retail tariff rates based on hour (for ToU tariffs)
       RETAIL_TARIFFS.forEach((tariff) => {
         dataPoint[`tariff_${tariff.id}`] = getTariffRateForHour(tariff, hour)
       })
@@ -224,16 +214,17 @@ export function ScreenPriceAnalysis({
     })
   }, [selectedPrices])
 
-  // Calculate Y-axis domain (all values in c/kWh)
+  // Calculate Y-axis domain (all values in c/kWh); DAM may be absent
   const { minY, maxY } = useMemo(() => {
     let min = Infinity
     let max = -Infinity
-    
+
     chartData.forEach((d) => {
-      const sem = d.semPrice as number
-      min = Math.min(min, sem)
-      max = Math.max(max, sem)
-      
+      const sem = d.semPrice as number | undefined
+      if (sem !== undefined) {
+        min = Math.min(min, sem)
+        max = Math.max(max, sem)
+      }
       RETAIL_TARIFFS.forEach((tariff) => {
         if (selectedTariffs.has(tariff.id)) {
           const val = d[`tariff_${tariff.id}`] as number
@@ -242,18 +233,19 @@ export function ScreenPriceAnalysis({
         }
       })
     })
-    
+
+    if (min === Infinity) return { minY: 0, maxY: 50 }
     const padding = (max - min) * 0.1
-    return { 
-      minY: Math.max(0, min - padding), 
-      maxY: max + padding 
+    return {
+      minY: Math.max(0, min - padding),
+      maxY: max + padding,
     }
   }, [chartData, selectedTariffs])
 
-  // Average SEM price for the day
-  const avgSemPrice = chartData.length > 0 
-    ? chartData.reduce((sum, d) => sum + (d.semPrice as number), 0) / chartData.length 
-    : 0
+  // Average SEM price for the day (only when DAM data is available)
+  const avgSemPrice = selectedPrices
+    ? chartData.reduce((sum, d) => sum + ((d.semPrice as number | undefined) ?? 0), 0) / chartData.length
+    : null
 
   // Toggle functions
   const toggleTariff = (id: string) => {
@@ -347,17 +339,17 @@ export function ScreenPriceAnalysis({
         </div>
       </div>
 
-      {/* Data unavailability banners */}
+      {/* DAM data unavailability banners */}
       {dayView === "today" && !todayPrices && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>Today&apos;s prices could not be retrieved. SEMO PX publishes today&apos;s data at midnight — try again shortly or check the data source status.</span>
+          <span>DAM wholesale line not available for today — SEMO PX publishes today&apos;s results at midnight. Configure <strong>ENTSOE_API_TOKEN</strong> for real-time data. Retail tariffs are shown.</span>
         </div>
       )}
-      {dayView === "tomorrow" && !tomorrowIsRealData && (
+      {dayView === "tomorrow" && !tomorrowPrices && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           <Clock className="h-4 w-4 flex-shrink-0" />
-          <span>Tomorrow&apos;s real prices are not available yet. ENTSO-E publishes them around 13:00 following the Day-Ahead auction.</span>
+          <span>DAM wholesale line not available for tomorrow — configure <strong>ENTSOE_API_TOKEN</strong> to fetch post-auction prices (~13:00 today). Retail tariffs are shown.</span>
         </div>
       )}
 
@@ -464,10 +456,12 @@ export function ScreenPriceAnalysis({
         </div>
 
         {/* Average DAM price */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
-          <span className="text-xs text-muted-foreground">Avg DAM ({dayView}):</span>
-          <span className="text-sm font-bold text-amber-600">{avgSemPrice.toFixed(2)} c/kWh</span>
-        </div>
+        {avgSemPrice !== null && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <span className="text-xs text-muted-foreground">Avg DAM ({dayView}):</span>
+            <span className="text-sm font-bold text-amber-600">{avgSemPrice.toFixed(2)} c/kWh</span>
+          </div>
+        )}
       </div>
 
       {/* Chart */}
@@ -477,7 +471,7 @@ export function ScreenPriceAnalysis({
         </CardHeader>
         <CardContent className="p-2 sm:p-4">
           <div className="w-full" style={{ height: '400px' }}>
-            {mounted && chartData.length > 0 ? (
+            {mounted ? (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
@@ -489,9 +483,9 @@ export function ScreenPriceAnalysis({
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  
+
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-                  
+
                   <XAxis
                     dataKey="time"
                     tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
@@ -506,9 +500,9 @@ export function ScreenPriceAnalysis({
                     tickLine={false}
                     tickFormatter={(value) => `${value.toFixed(0)}`}
                     width={35}
-                    label={{ 
-                      value: 'c/kWh', 
-                      angle: -90, 
+                    label={{
+                      value: 'c/kWh',
+                      angle: -90,
                       position: 'insideLeft',
                       style: { fontSize: 10, fill: 'var(--muted-foreground)' }
                     }}
@@ -517,41 +511,43 @@ export function ScreenPriceAnalysis({
                     content={({ active, payload }) => {
                       if (!active || !payload?.[0]) return null
                       const data = payload[0].payload
+                      const hasDam = data.semPriceEurMwh !== undefined
                       return (
                         <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg max-w-sm">
                           <p className="text-sm font-bold text-foreground">{data.time}</p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            DAM: {(data.semPriceEurMwh as number).toFixed(2)} €/MWh
-                          </p>
+                          {hasDam && (
+                            <p className="text-xs text-muted-foreground mb-2">
+                              DAM: {(data.semPriceEurMwh as number).toFixed(2)} €/MWh
+                            </p>
+                          )}
                           <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                            {/* DAM wholesale */}
-                            <div className="flex items-center justify-between gap-4">
-                              <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
-                                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                                DAM Wholesale:
-                              </span>
-                              <span className="text-xs font-bold text-amber-600">
-                                {(data.semPrice as number).toFixed(2)} c/kWh
-                              </span>
-                            </div>
-                            
-                            {/* Selected retail tariffs */}
+                            {hasDam && (
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+                                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                                  DAM Wholesale:
+                                </span>
+                                <span className="text-xs font-bold text-amber-600">
+                                  {(data.semPrice as number).toFixed(2)} c/kWh
+                                </span>
+                              </div>
+                            )}
                             {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, idx) => {
                               const color = getTariffColor(tariff, idx)
                               const rate = data[`tariff_${tariff.id}`] as number
                               return (
                                 <div key={tariff.id} className="flex items-center justify-between gap-4">
-                                  <span 
+                                  <span
                                     className="flex items-center gap-1.5 text-xs truncate"
                                     style={{ color }}
                                   >
-                                    <span 
+                                    <span
                                       className="h-2 w-2 rounded-full flex-shrink-0"
                                       style={{ backgroundColor: color }}
                                     />
                                     {tariff.supplier} {tariff.planName}:
                                   </span>
-                                  <span 
+                                  <span
                                     className="text-xs font-bold flex-shrink-0"
                                     style={{ color }}
                                   >
@@ -583,18 +579,21 @@ export function ScreenPriceAnalysis({
                     />
                   )}
 
-                  {/* DAM wholesale price area (always shown) */}
-                  <Area
-                    type="monotone"
-                    dataKey="semPrice"
-                    stroke={damLineColor}
-                    strokeWidth={2.5}
-                    fill="url(#semGradient)"
-                    dot={false}
-                    name="DAM Wholesale"
-                  />
+                  {/* DAM wholesale area — only when price data is available */}
+                  {selectedPrices && (
+                    <Area
+                      type="monotone"
+                      dataKey="semPrice"
+                      stroke={damLineColor}
+                      strokeWidth={2.5}
+                      fill="url(#semGradient)"
+                      dot={false}
+                      name="DAM Wholesale"
+                      connectNulls={false}
+                    />
+                  )}
 
-                  {/* Retail tariff lines */}
+                  {/* Retail tariff lines — always shown */}
                   {RETAIL_TARIFFS.filter(t => selectedTariffs.has(t.id)).map((tariff, idx) => {
                     const color = getTariffColor(tariff, idx)
                     const isFlat = tariff.type === "flat"
@@ -613,17 +612,6 @@ export function ScreenPriceAnalysis({
                   })}
                 </ComposedChart>
               </ResponsiveContainer>
-            ) : mounted && !selectedPrices ? (
-              <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-                <p className="text-base font-semibold text-muted-foreground">No price data available</p>
-                <p className="text-sm text-muted-foreground/60">
-                  {dayView === "today"
-                    ? "Today's prices could not be retrieved from ENTSO-E or SEMO PX."
-                    : dayView === "tomorrow"
-                    ? "Tomorrow's prices are not yet published."
-                    : "Yesterday's prices could not be retrieved."}
-                </p>
-              </div>
             ) : (
               <div className="h-full flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -631,7 +619,7 @@ export function ScreenPriceAnalysis({
             )}
           </div>
           {/* Time-of-Use Bands Bar */}
-          {mounted && chartData.length > 0 && (
+          {mounted && (
             <div className="mt-2 px-[35px] pr-[10px]">
               <div className="flex h-4 rounded overflow-hidden">
                 {chartData.map((point, idx) => (
