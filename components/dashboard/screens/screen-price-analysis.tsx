@@ -23,7 +23,7 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from "recharts"
-import { ChevronDown, Loader2 } from "lucide-react"
+import { ChevronDown, Loader2, Clock } from "lucide-react"
 import type { DayPrices, DayTariffs, Quintile } from "@/lib/types"
 import { getPriceColor } from "@/lib/types"
 import { 
@@ -58,6 +58,7 @@ interface ScreenPriceAnalysisProps {
   yesterdayPrices: DayPrices | null
   yesterdayTariffs?: DayTariffs | null
   currentPeriodIndex: number
+  tomorrowIsRealData?: boolean
 }
 
 export function ScreenPriceAnalysis({
@@ -65,6 +66,7 @@ export function ScreenPriceAnalysis({
   tomorrowPrices,
   yesterdayPrices,
   currentPeriodIndex,
+  tomorrowIsRealData = false,
 }: ScreenPriceAnalysisProps) {
   const { resolvedTheme } = useTheme()
   const [dayView, setDayView] = useState<DayView>("today")
@@ -129,11 +131,11 @@ export function ScreenPriceAnalysis({
   // Get displayed date based on dayView
   const getDisplayDate = () => {
     const now = new Date()
-    let targetDate = now
+    const targetDate = new Date(now)
     if (dayView === "yesterday") {
-      targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      targetDate.setDate(targetDate.getDate() - 1)
     } else if (dayView === "tomorrow") {
-      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      targetDate.setDate(targetDate.getDate() + 1)
     }
     return targetDate.toLocaleDateString("en-IE", {
       weekday: "long",
@@ -176,8 +178,11 @@ export function ScreenPriceAnalysis({
     if (!selectedPrices?.periods) return []
     
     return selectedPrices.periods.map((period, idx) => {
-      const date = new Date(period.start_time_dublin)
-      const hour = date.getHours()
+      const date = new Date(period.start_time_utc)
+      const hour = parseInt(
+        new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Dublin", hour: "numeric", hour12: false })
+          .format(date)
+      )
       const semPriceEurMwh = period.price_eur_mwh
       
       // SEM wholesale in c/kWh
@@ -328,6 +333,14 @@ export function ScreenPriceAnalysis({
           </Button>
         </div>
       </div>
+
+      {/* Tomorrow not available yet banner */}
+      {dayView === "tomorrow" && !tomorrowIsRealData && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span>Tomorrow&apos;s prices are not available yet. They are usually published around 13:00 Dublin time. Showing estimated prices.</span>
+        </div>
+      )}
 
       {/* Controls: Tariff Selector + Type Filter + Stats */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

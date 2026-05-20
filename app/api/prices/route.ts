@@ -14,6 +14,18 @@ function formatDate(date: Date): string {
   return date.toISOString().split("T")[0]
 }
 
+// Returns Dublin UTC offset in hours: 0 (GMT, Oct–Mar) or 1 (IST, Mar–Oct)
+function getDublinUtcOffsetHours(tradingDay: string): number {
+  const noon = new Date(`${tradingDay}T12:00:00Z`)
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Dublin",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(noon)
+  const dublinHour = parseInt(parts.find(p => p.type === "hour")?.value ?? "12")
+  return dublinHour - 12
+}
+
 // Format date for ENTSO-E API (YYYYMMDDHHMM)
 function formatEntsoeDate(date: Date): string {
   const year = date.getUTCFullYear()
@@ -140,7 +152,7 @@ async function fetchEntsoePrices(tradingDay: string): Promise<PricePeriod[] | nu
     }
     
     // Convert to half-hourly periods
-    return convertToPeriods(tradingDay, hourlyPrices, "ENTSOE")
+    return convertToPeriods(tradingDay, hourlyPrices, "ENTSO-E")
   } catch {
     return null
   }
@@ -200,7 +212,7 @@ function parseSemoCsv(csvContent: string): number[] | null {
           if (!trimmed) continue
           
           // Replace comma with dot for decimal parsing (European format: 15,000 -> 15.000)
-          const normalized = trimmed.replace(',', '.')
+          const normalized = trimmed.replace(/,/g, '.')
           const value = parseFloat(normalized)
           
           // Accept any valid number (including negatives - DAM can have negative prices)
@@ -231,8 +243,8 @@ function parseSemoCsv(csvContent: string): number[] | null {
 // Fetch real DAM prices from SEMO for a specific date
 async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null> {
   try {
-    // Search for reports that cover the trading day
-    // SEMO report names contain the delivery date
+    // Search recent reports — date_from/to filters by publish date, not delivery date,
+    // so we fetch the 30 most recent and match by DateRetention (= delivery day)
     const searchUrl = `https://reports.sem-o.com/api/v1/documents/static-reports?ResourceName=MarketResult_SEM-DA&page_size=30&sort_by=PublishTime%20desc`
     
     const searchResponse = await fetch(searchUrl, {
@@ -273,9 +285,8 @@ async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null
       }
     }
     
-    // If no exact match, use most recent (for tomorrow which may not be published yet)
     if (!selectedReport) {
-      selectedReport = searchData.items[0]
+      return null
     }
     
     const csvUrl = `https://reports.sem-o.com/documents/${selectedReport.ResourceName}`
@@ -299,30 +310,33 @@ async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null
 }
 
 // Convert hourly prices to half-hourly periods
-function convertToPeriods(tradingDay: string, hourlyPrices: number[], source: "SEMOPX" | "ENTSOE" | "Interpolated"): PricePeriod[] {
+function convertToPeriods(tradingDay: string, hourlyPrices: number[], source: "SEMOPX" | "ENTSO-E" | "Interpolated"): PricePeriod[] {
   const periods: PricePeriod[] = []
-  
+  const offsetHours = getDublinUtcOffsetHours(tradingDay)
+  const offsetStr = offsetHours === 1 ? "+01:00" : "+00:00"
+
   for (let i = 0; i < 48; i++) {
     const hourIndex = Math.floor(i / 2)
     const price = hourlyPrices[hourIndex] ?? hourlyPrices[Math.min(hourIndex, hourlyPrices.length - 1)] ?? 80
-    
+
     const hour = Math.floor(i / 2)
     const minute = (i % 2) * 30
     const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-    
-    const startDate = new Date(`${tradingDay}T${startTime}:00+01:00`)
-    const utcDate = new Date(startDate.getTime() - 60 * 60 * 1000)
-    
+
+    // Construct Dublin local time string, then parse to get correct UTC
+    const dublinLocalStr = `${tradingDay}T${startTime}:00${offsetStr}`
+    const utcDate = new Date(dublinLocalStr)
+
     periods.push({
       period: i + 1,
       start_time_utc: utcDate.toISOString(),
-      start_time_dublin: startDate.toISOString(),
+      start_time_dublin: dublinLocalStr,
       price_eur_mwh: Math.round(price * 100) / 100,
       quintile: 3 as 1 | 2 | 3 | 4 | 5,
       source,
     })
   }
-  
+
   calculateQuintiles(periods)
   return periods
 }
@@ -484,7 +498,7 @@ export async function GET() {
       ...yesterdayPrices.periods.map(p => p.source),
     ])]
     
-    const primarySource = sources.includes("ENTSOE") ? "ENTSOE" : sources.includes("SEMOPX") ? "SEMOPX" : "Simulated"
+    const primarySource = sources.includes("ENTSO-E") ? "ENTSO-E" : sources.includes("SEMOPX") ? "SEMOPX" : "Simulated"
     
     // Backend status
     const backendStatus = {
@@ -497,6 +511,8 @@ export async function GET() {
       yesterday_source: yesterdayPrices.periods[0]?.source || "Unknown",
     }
     
+    const tomorrowIsRealData = tomorrowPrices.periods[0]?.source !== "Interpolated"
+
     return NextResponse.json({
       todayPrices,
       tomorrowPrices,
@@ -507,6 +523,7 @@ export async function GET() {
       currentPrice,
       currentTariff,
       currentPeriodIndex,
+      tomorrowIsRealData,
       backendStatus,
       fetchedAt: new Date().toISOString(),
     })

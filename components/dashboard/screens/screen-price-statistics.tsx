@@ -76,11 +76,11 @@ export function ScreenPriceStatistics({
   // Get displayed date based on dayView
   const getDisplayDate = () => {
     const now = new Date()
-    let targetDate = now
+    const targetDate = new Date(now)
     if (dayView === "yesterday") {
-      targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      targetDate.setDate(targetDate.getDate() - 1)
     } else if (dayView === "tomorrow") {
-      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      targetDate.setDate(targetDate.getDate() + 1)
     }
     return targetDate.toLocaleDateString("en-IE", {
       weekday: "long",

@@ -20,6 +20,7 @@ interface PricesApiResponse {
   currentPrice: CurrentPrice
   currentTariff: CurrentTariff
   currentPeriodIndex: number
+  tomorrowIsRealData: boolean
   backendStatus: BackendStatus
   fetchedAt: string
 }
@@ -67,14 +68,19 @@ export function Dashboard() {
   const currentTariff = data?.currentTariff ?? null
   const backendStatus = data?.backendStatus ?? null
 
-  // Update current period index every minute
+  // Update current period index every 30s using Dublin timezone
   useEffect(() => {
     const updatePeriod = () => {
       const now = new Date()
-      const dublinHour = now.getHours()
-      const dublinMinute = now.getMinutes()
-      const newIndex = dublinHour * 2 + (dublinMinute >= 30 ? 1 : 0)
-      setCurrentPeriodIndex(Math.min(newIndex, 47))
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Europe/Dublin",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(now)
+      const dublinHour = parseInt(parts.find(p => p.type === "hour")?.value ?? "0")
+      const dublinMinute = parseInt(parts.find(p => p.type === "minute")?.value ?? "0")
+      setCurrentPeriodIndex(Math.min(dublinHour * 2 + (dublinMinute >= 30 ? 1 : 0), 47))
     }
 
     updatePeriod()
@@ -218,6 +224,7 @@ export function Dashboard() {
               yesterdayPrices={yesterdayPrices}
               yesterdayTariffs={data?.yesterdayTariffs ?? null}
               currentPeriodIndex={currentPeriodIndex}
+              tomorrowIsRealData={data?.tomorrowIsRealData ?? false}
             />
           )}
           {currentScreen === 2 && (
