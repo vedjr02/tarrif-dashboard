@@ -26,12 +26,14 @@ function getDublinUtcOffsetHours(tradingDay: string): number {
   return dublinHour - 12
 }
 
-// Format date for ENTSO-E API (YYYYMMDDHHMM)
+// Format date for ENTSO-E API (YYYYMMDDHHMM in UTC)
 function formatEntsoeDate(date: Date): string {
   const year = date.getUTCFullYear()
   const month = String(date.getUTCMonth() + 1).padStart(2, "0")
   const day = String(date.getUTCDate()).padStart(2, "0")
-  return `${year}${month}${day}0000`
+  const hour = String(date.getUTCHours()).padStart(2, "0")
+  const minute = String(date.getUTCMinutes()).padStart(2, "0")
+  return `${year}${month}${day}${hour}${minute}`
 }
 
 // Get Dublin date for a given offset
@@ -72,51 +74,40 @@ function calculateTariff(spotPrice: number): { tariff_eur_mwh: number; tariff_eu
 // Parse ENTSO-E XML response to extract Day-Ahead prices
 function parseEntsoeXml(xmlContent: string, tradingDay: string): number[] | null {
   try {
-    // Extract all price points from the XML
     const prices: { position: number; price: number }[] = []
-    
-    // Find TimeSeries with A44 (Day-ahead prices)
+
     const timeSeriesMatches = xmlContent.match(/<TimeSeries>[\s\S]*?<\/TimeSeries>/g)
     if (!timeSeriesMatches) return null
-    
+
     for (const ts of timeSeriesMatches) {
-      // Check if this is a price time series (not volumes)
       if (!ts.includes("A62") && !ts.includes("price")) continue
-      
-      // Extract period
+
       const periodMatch = ts.match(/<Period>[\s\S]*?<\/Period>/g)
       if (!periodMatch) continue
-      
+
       for (const period of periodMatch) {
-        // Check if this period covers our trading day
         const startMatch = period.match(/<start>([\d\-T:Z]+)<\/start>/)
         if (startMatch) {
-          const startDate = startMatch[1].split("T")[0]
-          // Only process if this is for the correct day
-          if (startDate !== tradingDay) continue
+          // Compare Dublin local date (not raw UTC date — SEM zone is UTC+0/+1)
+          const startDublinDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Dublin" })
+            .format(new Date(startMatch[1]))
+          if (startDublinDate !== tradingDay) continue
         }
-        
-        // Extract all points
+
         const pointMatches = period.match(/<Point>[\s\S]*?<\/Point>/g)
         if (!pointMatches) continue
-        
+
         for (const point of pointMatches) {
           const posMatch = point.match(/<position>(\d+)<\/position>/)
           const priceMatch = point.match(/<price\.amount>([\d.]+)<\/price\.amount>/)
-          
           if (posMatch && priceMatch) {
-            prices.push({
-              position: parseInt(posMatch[1]),
-              price: parseFloat(priceMatch[2]),
-            })
+            prices.push({ position: parseInt(posMatch[1]), price: parseFloat(priceMatch[1]) })
           }
         }
       }
     }
-    
+
     if (prices.length === 0) return null
-    
-    // Sort by position and return prices
     prices.sort((a, b) => a.position - b.position)
     return prices.map(p => p.price)
   } catch {
@@ -132,107 +123,93 @@ async function fetchEntsoePrices(tradingDay: string): Promise<PricePeriod[] | nu
   }
   
   try {
-    const startDate = new Date(tradingDay + "T00:00:00Z")
-    const endDate = new Date(tradingDay + "T23:59:59Z")
-    endDate.setDate(endDate.getDate() + 1)
-    
+    // Query from previous day 22:00Z — SEM zone day starts at 23:00Z (summer) or 00:00Z (winter),
+    // which in UTC is always at or after 22:00Z of the previous calendar day.
+    const prevDay = new Date(tradingDay + "T22:00:00Z")
+    prevDay.setDate(prevDay.getDate() - 1)
+    const startDate = prevDay // D-1 @ 22:00Z
+    const endDate = new Date(tradingDay + "T23:00:00Z") // D @ 23:00Z (covers Dublin 23:30 in summer)
+
     const url = `https://web-api.tp.entsoe.eu/api?documentType=A44&in_Domain=${IRELAND_BIDDING_ZONE}&out_Domain=${IRELAND_BIDDING_ZONE}&periodStart=${formatEntsoeDate(startDate)}&periodEnd=${formatEntsoeDate(endDate)}&securityToken=${token}`
     
     const response = await fetch(url, { next: { revalidate: 300 } })
-    
+
     if (!response.ok) {
+      const body = await response.text().catch(() => "")
+      console.error(`[entsoe] ${tradingDay}: HTTP ${response.status} — ${body.slice(0, 300)}`)
       return null
     }
-    
+
     const xmlContent = await response.text()
     const hourlyPrices = parseEntsoeXml(xmlContent, tradingDay)
-    
+
     if (!hourlyPrices || hourlyPrices.length < 20) {
+      console.error(`[entsoe] ${tradingDay}: parsed ${hourlyPrices?.length ?? 0} prices (need ≥20)`)
       return null
     }
-    
-    // Convert to half-hourly periods
+
     return convertToPeriods(tradingDay, hourlyPrices, "ENTSO-E")
-  } catch {
+  } catch (e) {
+    console.error(`[entsoe] ${tradingDay}: exception —`, e)
     return null
   }
 }
 
-// Parse SEMO CSV and extract ROI-DA EUR prices
-// CSV structure:
-//   Market Area;ROI-DA
-//   Index prices;60;EUR
-//   2025-05-24T22:00:00Z;2025-05-24T23:00:00Z;... (timestamps)
-//   15,000;0,000;-0,100;-4,000;... (prices in EUR/MWh)
-function parseSemoCsv(csvContent: string): number[] | null {
+// Parse SEMO CSV — returns UTC timestamps and EUR/MWh prices for the ROI-DA section.
+// CSV has "Market;ROI-DA" sections with "Index prices;30;EUR" (half-hourly) rows.
+// SEMO trading day starts at UTC 22:00Z (= Dublin 23:00 IST or 22:00 GMT).
+function parseSemoCsv(csvContent: string): { timestamps: string[]; prices: number[] } | null {
   try {
     const lines = csvContent.split('\n')
     let inRoiSection = false
     let foundEurPricesHeader = false
-    let skippedTimestampLine = false
-    
+    let timestampLine: string | null = null
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim()
-      
-      // Enter ROI-DA section
-      if (line.startsWith('Market Area;ROI-DA')) {
+
+      // Enter ROI-DA section (CSV uses "Market;ROI-DA", not "Market Area;ROI-DA")
+      if (line === 'Market;ROI-DA') {
         inRoiSection = true
         foundEurPricesHeader = false
-        skippedTimestampLine = false
+        timestampLine = null
         continue
       }
-      
-      // Exit ROI-DA section when we hit another Market Area
-      if (inRoiSection && line.startsWith('Market Area;') && !line.includes('ROI-DA')) {
+
+      // Exit when another Market section starts
+      if (inRoiSection && line.startsWith('Market;') && !line.includes('ROI-DA')) {
         inRoiSection = false
         continue
       }
-      
-      // Found EUR prices header
-      if (inRoiSection && (line.startsWith('Index prices;60;EUR') || line.startsWith('Index prices;30;EUR'))) {
+
+      if (inRoiSection && (line.startsWith('Index prices;30;EUR') || line.startsWith('Index prices;60;EUR'))) {
         foundEurPricesHeader = true
-        skippedTimestampLine = false
+        timestampLine = null
         continue
       }
-      
-      // Skip the timestamp line (contains ISO dates like 2025-05-24T22:00:00Z)
-      if (foundEurPricesHeader && !skippedTimestampLine && line.includes('T') && line.includes('Z')) {
-        skippedTimestampLine = true
+
+      // Capture the timestamp line (ISO dates with T and Z)
+      if (foundEurPricesHeader && timestampLine === null && line.includes('T') && line.includes('Z')) {
+        timestampLine = line
         continue
       }
-      
-      // This is THE prices line - immediately after timestamp line
-      // Format: 15,000;0,000;-0,100;-4,000;... (comma = decimal separator)
-      if (foundEurPricesHeader && skippedTimestampLine) {
-        const parts = line.split(';')
+
+      // Next line after timestamps is the prices
+      if (foundEurPricesHeader && timestampLine !== null) {
+        const timestamps = timestampLine.split(';').map(s => s.trim()).filter(Boolean)
         const prices: number[] = []
-        
-        for (const part of parts) {
-          const trimmed = part.trim()
-          if (!trimmed) continue
-          
-          // Replace comma with dot for decimal parsing (European format: 15,000 -> 15.000)
-          const normalized = trimmed.replace(/,/g, '.')
-          const value = parseFloat(normalized)
-          
-          // Accept any valid number (including negatives - DAM can have negative prices)
-          if (!isNaN(value)) {
-            prices.push(value)
-          }
+        for (const part of line.split(';')) {
+          const v = parseFloat(part.trim().replace(/,/g, '.'))
+          if (!isNaN(v)) prices.push(v)
         }
-        
-        // We found the prices line - return if we have enough values
-        if (prices.length >= 20) {
-          return prices
+        if (prices.length >= 20 && timestamps.length === prices.length) {
+          return { timestamps, prices }
         }
-        
-        // If we got here but don't have enough prices, something is wrong
-        // Reset and keep looking for another Index prices;60;EUR section
+        // Reset and keep scanning
         foundEurPricesHeader = false
-        skippedTimestampLine = false
+        timestampLine = null
       }
     }
-    
     return null
   } catch (e) {
     console.error("[v0] SEMO CSV parse error:", e)
@@ -243,70 +220,71 @@ function parseSemoCsv(csvContent: string): number[] | null {
 // Fetch real DAM prices from SEMO for a specific date
 async function fetchSemoPrices(tradingDay: string): Promise<PricePeriod[] | null> {
   try {
-    // semopx.com is the correct domain (sem-o.com only has 2025 data).
-    // The API PublishTime = midnight D+2, so today/tomorrow reports are not yet indexed.
-    // We match by the Date field (delivery day) which is D+1 = the actual trading day.
     const searchUrl = `https://reports.semopx.com/api/v1/documents/static-reports?name=MarketResult_SEM-DA&group=Market+Data&page_size=10&sort_by=PublishTime&order_by=DESC`
 
     const searchResponse = await fetch(searchUrl, {
       headers: { "Accept": "application/json" },
       next: { revalidate: 300 },
     })
-
-    if (!searchResponse.ok) {
-      return null
-    }
+    if (!searchResponse.ok) return null
 
     const searchData = await searchResponse.json()
+    if (!searchData.items || searchData.items.length === 0) return null
 
-    if (!searchData.items || searchData.items.length === 0) {
-      return null
-    }
-
-    // Match by Date field (= delivery/trading day, format "YYYY-MM-DDT10:00:00")
+    // Match by Date field (delivery/trading day, e.g. "2026-05-19T10:00:00")
     const selectedReport = searchData.items.find(
       (report: { Date?: string }) => report.Date?.startsWith(tradingDay)
     ) ?? null
+    if (!selectedReport) return null
 
-    if (!selectedReport) {
-      return null
-    }
+    const csvResponse = await fetch(`https://reports.semopx.com/documents/${selectedReport.ResourceName}`, {
+      next: { revalidate: 300 },
+    })
+    if (!csvResponse.ok) return null
 
-    const csvUrl = `https://reports.semopx.com/documents/${selectedReport.ResourceName}`
-    
-    const csvResponse = await fetch(csvUrl, { next: { revalidate: 300 } })
-    if (!csvResponse.ok) {
-      return null
-    }
-    
-    const csvContent = await csvResponse.text()
-    const hourlyPrices = parseSemoCsv(csvContent)
-    
-    if (!hourlyPrices || hourlyPrices.length < 20) {
-      return null
-    }
-    
-    return convertToPeriods(tradingDay, hourlyPrices, "SEMOPX")
+    const result = parseSemoCsv(await csvResponse.text())
+    if (!result || result.prices.length < 20) return null
+
+    const { prices } = result
+
+    // SEMO day starts at UTC 22:00Z. Dublin midnight is later:
+    //   Summer (IST = UTC+1): midnight = UTC 23:00Z = SEMO index 2
+    //   Winter (GMT = UTC+0): midnight = UTC 00:00Z = SEMO index 4
+    // Shift the array so index 0 = Dublin midnight, padding the tail with the last known price.
+    const offsetHours = getDublinUtcOffsetHours(tradingDay)
+    const shift = 2 * (2 - offsetHours) // 2 in summer, 4 in winter
+    const aligned = [
+      ...prices.slice(shift),
+      ...Array(shift).fill(prices[prices.length - 1] ?? 0),
+    ]
+
+    return convertToPeriods(tradingDay, aligned, "SEMOPX", true)
   } catch {
     return null
   }
 }
 
-// Convert hourly prices to half-hourly periods
-function convertToPeriods(tradingDay: string, hourlyPrices: number[], source: "SEMOPX" | "ENTSO-E" | "Interpolated"): PricePeriod[] {
+// Convert prices to 48 half-hourly periods aligned to Dublin midnight.
+// halfHourly=true: each element in `prices` is one 30-min period (SEMO).
+// halfHourly=false: each element covers 60 min, duplicated for two slots (ENTSO-E hourly).
+function convertToPeriods(
+  tradingDay: string,
+  prices: number[],
+  source: "SEMOPX" | "ENTSO-E" | "Interpolated",
+  halfHourly = false,
+): PricePeriod[] {
   const periods: PricePeriod[] = []
   const offsetHours = getDublinUtcOffsetHours(tradingDay)
   const offsetStr = offsetHours === 1 ? "+01:00" : "+00:00"
 
   for (let i = 0; i < 48; i++) {
-    const hourIndex = Math.floor(i / 2)
-    const price = hourlyPrices[hourIndex] ?? hourlyPrices[Math.min(hourIndex, hourlyPrices.length - 1)] ?? 80
+    const priceIndex = halfHourly ? i : Math.floor(i / 2)
+    const price = prices[priceIndex] ?? prices[Math.min(priceIndex, prices.length - 1)] ?? 0
 
     const hour = Math.floor(i / 2)
     const minute = (i % 2) * 30
     const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
 
-    // Construct Dublin local time string, then parse to get correct UTC
     const dublinLocalStr = `${tradingDay}T${startTime}:00${offsetStr}`
     const utcDate = new Date(dublinLocalStr)
 

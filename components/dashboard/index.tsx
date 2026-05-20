@@ -67,7 +67,6 @@ export function Dashboard() {
   const currentPrice = data?.currentPrice ?? null
   const currentTariff = data?.currentTariff ?? null
   const backendStatus = data?.backendStatus ?? null
-  const currentPeriodIndexFromApi = data?.currentPeriodIndex ?? 0
 
   // Update current period index every 30s using Dublin timezone
   useEffect(() => {
