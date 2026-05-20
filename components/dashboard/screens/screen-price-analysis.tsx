@@ -24,7 +24,8 @@ import {
   CartesianGrid,
 } from "recharts"
 import { ChevronDown, Loader2 } from "lucide-react"
-import type { DayPrices, DayTariffs, BackendStatus } from "@/lib/types"
+import type { DayPrices, DayTariffs, BackendStatus, Quintile } from "@/lib/types"
+import { getPriceColor, getQuintileColor, QUINTILE_CONFIG } from "@/lib/types"
 import { 
   RETAIL_TARIFFS, 
   getTariffRateForHour, 
@@ -192,6 +193,13 @@ export function ScreenPriceAnalysis({
       const semPrice = semPriceEurMwh !== undefined ? semPriceEurMwh / 10 : undefined
 
       const touBand = getTimeOfUseBand(hour)
+      // Bar color: actual price quintile when DAM data available, fixed ToU band otherwise
+      const barColor = damPeriod
+        ? getPriceColor(damPeriod.price_eur_mwh, damPeriod.quintile as Quintile)
+        : touBand.color
+      const barTitle = damPeriod
+        ? `${time} — €${damPeriod.price_eur_mwh.toFixed(0)}/MWh`
+        : `${time} — ${touBand.band}`
       const dataPoint: Record<string, number | string | undefined> = {
         periodIdx: i,
         hour,
@@ -201,6 +209,8 @@ export function ScreenPriceAnalysis({
         quintile: damPeriod?.quintile ?? 3,
         touBand: touBand.band,
         touColor: touBand.color,
+        barColor,
+        barTitle,
       }
 
       RETAIL_TARIFFS.forEach((tariff) => {
@@ -606,7 +616,7 @@ export function ScreenPriceAnalysis({
               </div>
             )}
           </div>
-          {/* Time-of-Use Bands Bar */}
+          {/* Price bar: quintile colors when DAM available, ToU bands otherwise */}
           {mounted && (
             <div className="mt-2 px-[35px] pr-[10px]">
               <div className="flex h-4 rounded overflow-hidden">
@@ -614,25 +624,37 @@ export function ScreenPriceAnalysis({
                   <div
                     key={idx}
                     className="flex-1"
-                    style={{ backgroundColor: point.touColor as string, opacity: 0.7 }}
-                    title={`${point.time} - ${point.touBand}`}
+                    style={{ backgroundColor: point.barColor as string, opacity: 0.75 }}
+                    title={point.barTitle as string}
                   />
                 ))}
               </div>
-              {/* ToU Legend */}
-              <div className="flex justify-center gap-4 mt-2 text-xs">
-                {[
-                  { band: "Night", hours: "23:00-08:00", color: "var(--q1-cheap)" },
-                  { band: "Off-Peak", hours: "08-09, 19-23", color: "var(--q2-below)" },
-                  { band: "Day", hours: "09:00-17:00", color: "var(--q3-average)" },
-                  { band: "Peak", hours: "17:00-19:00", color: "var(--q5-expensive)" },
-                ].map((item) => (
-                  <div key={item.band} className="flex items-center gap-1">
-                    <div className="h-2 w-3 rounded-sm" style={{ backgroundColor: item.color, opacity: 0.7 }} />
-                    <span className="text-muted-foreground">{item.band}</span>
-                  </div>
-                ))}
-              </div>
+              {selectedPrices ? (
+                /* Quintile legend — reflects actual price distribution */
+                <div className="flex justify-center gap-3 mt-2 text-xs">
+                  {([1, 2, 3, 4, 5] as Quintile[]).map((q) => (
+                    <div key={q} className="flex items-center gap-1">
+                      <div className="h-2 w-3 rounded-sm" style={{ backgroundColor: getQuintileColor(q), opacity: 0.75 }} />
+                      <span className="text-muted-foreground">{QUINTILE_CONFIG[q].signal}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Fixed ToU band legend — shown when no DAM data */
+                <div className="flex justify-center gap-4 mt-2 text-xs">
+                  {[
+                    { band: "Night", color: "var(--q1-cheap)" },
+                    { band: "Off-Peak", color: "var(--q2-below)" },
+                    { band: "Day", color: "var(--q3-average)" },
+                    { band: "Peak", color: "var(--q5-expensive)" },
+                  ].map((item) => (
+                    <div key={item.band} className="flex items-center gap-1">
+                      <div className="h-2 w-3 rounded-sm" style={{ backgroundColor: item.color, opacity: 0.75 }} />
+                      <span className="text-muted-foreground">{item.band}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
