@@ -24,8 +24,10 @@ type DashboardStore = DashboardData & {
   defaultPlaybook: "Conservative" | "Balanced" | "Aggressive";
   notificationThreshold: "high" | "high-medium" | "all";
   theme: "dark" | "light" | "midnight";
-  dismissedAlerts: Set<string>;
-  snoozedAlerts: Map<string, number>;
+  /** Plain object keyed by alert id — avoids Set/Map in SSR/dev bundler edge cases */
+  dismissedAlertIds: Record<string, true>;
+  /** Alert id → epoch ms when snooze ends */
+  alertSnoozeUntilMs: Record<string, number>;
   loadData: () => Promise<void>;
   setSelectedProvider: (provider: string) => void;
   setSelectedDevice: (device: string) => void;
@@ -61,8 +63,8 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   defaultPlaybook: "Balanced",
   notificationThreshold: "high-medium",
   theme: "dark",
-  dismissedAlerts: new Set(),
-  snoozedAlerts: new Map(),
+  dismissedAlertIds: {},
+  alertSnoozeUntilMs: {},
   loadData: async () => {
     if (get().initialized || get().loading) {
       return;
@@ -92,17 +94,13 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   setNotificationThreshold: (notificationThreshold) => set({ notificationThreshold }),
   setTheme: (theme) => set({ theme }),
   dismissAlert: (id) =>
-    set((state) => {
-      const next = new Set(state.dismissedAlerts);
-      next.add(id);
-      return { dismissedAlerts: next };
-    }),
+    set((state) => ({
+      dismissedAlertIds: { ...state.dismissedAlertIds, [id]: true }
+    })),
   snoozeAlert: (id, minutes) =>
-    set((state) => {
-      const next = new Map(state.snoozedAlerts);
-      next.set(id, Date.now() + minutes * 60 * 1000);
-      return { snoozedAlerts: next };
-    })
+    set((state) => ({
+      alertSnoozeUntilMs: { ...state.alertSnoozeUntilMs, [id]: Date.now() + minutes * 60 * 1000 }
+    }))
 }));
 
 export const formatCurrency = (value: number, currency: Tariff["currency"] = "EUR"): string =>

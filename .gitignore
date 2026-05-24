@@ -1,10 +1,18 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+next.user-config.*
+
 # dependencies
 node_modules
 .pnp
 .pnp.js
 
 # build
-.next
+.next/
 out
 build
 dist
@@ -30,4 +38,4 @@ yarn-error.log*
 *.tsbuildinfo
 
 # vercel
-.vercel
+.vercel/

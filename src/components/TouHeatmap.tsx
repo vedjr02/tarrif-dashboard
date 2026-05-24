@@ -31,7 +31,10 @@ export function TouHeatmap({ periods }: TouHeatmapProps) {
             {hours.map((hour) => {
               const value = map.get(`${day}-${hour}`) ?? 0.7;
               return (
-                <div key={`${day}-${hour}`} className={`rounded-md px-2 py-2 text-center text-xs text-white ${cellTone(value)}`}>
+                <div
+                  key={`${day}-${hour}`}
+                  className={`tou-heatmap-cell rounded-md px-2 py-2 text-center text-xs text-white ${cellTone(value)}`}
+                >
                   {value.toFixed(2)}x
                 </div>
               );

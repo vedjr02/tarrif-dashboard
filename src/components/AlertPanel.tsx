@@ -22,13 +22,14 @@ const SNOOZE_OPTIONS = [
 ];
 
 export function AlertPanel({ alerts }: AlertPanelProps) {
-  const { dismissedAlerts, snoozedAlerts, dismissAlert, snoozeAlert } = useDashboardStore();
+  const { dismissedAlertIds, alertSnoozeUntilMs, dismissAlert, snoozeAlert } = useDashboardStore();
   const [snoozeMenuFor, setSnoozeMenuFor] = useState<string | null>(null);
 
   const now = Date.now();
-  const visible = alerts.filter(
-    (a) => !dismissedAlerts.has(a.id) && (snoozedAlerts.get(a.id) ?? 0) <= now
-  );
+  const visible = alerts.filter((a) => {
+    const until = alertSnoozeUntilMs[a.id] ?? 0;
+    return !dismissedAlertIds[a.id] && until <= now;
+  });
 
   return (
     <div className="glass-panel p-5">

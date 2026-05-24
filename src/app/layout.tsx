@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body className={`${uiFont.className} ${uiFont.variable} ${brandFont.variable}`}>
         <AppShell>{children}</AppShell>
       </body>
